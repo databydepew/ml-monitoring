@@ -90,3 +90,43 @@ serverFiles:
               summary: "New prediction made"
               description: "A new loan prediction was made in the last minute"
               prediction_rate: '{{ $value | printf "%.2f" }} predictions per minute'
+
+          - alert: HighErrorRate
+            expr: |
+              rate(model_prediction_errors_total[5m]) /
+              rate(model_predictions_total[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High model error rate detected"
+              description: "Model error rate is above 10% over the last 5 minutes"
+              error_rate: '{{ $value | humanizePercentage }} of predictions are errors'
+
+          - alert: AnomalyDetected
+            expr: |
+              abs(
+                (rate(model_prediction_values_sum[5m]) / rate(model_prediction_values_count[5m])) -
+                (avg_over_time(model_prediction_values_sum[7d]) / avg_over_time(model_prediction_values_count[7d]))
+              ) / stddev_over_time(model_prediction_values_sum[7d] / model_prediction_values_count[7d]) > 3
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Anomaly detected in model predictions"
+              description: "Model predictions have deviated more than 3 standard deviations from the 7-day average"
+              deviation: '{{ $value | printf "%.2f" }} standard deviations from normal'
+
+          - alert: FeatureAnomalyDetected
+            expr: |
+              abs(
+                (rate(feature_values_sum[5m]) / rate(feature_values_count[5m])) -
+                (avg_over_time(feature_values_sum[7d]) / avg_over_time(feature_values_count[7d]))
+              ) / stddev_over_time(feature_values_sum[7d] / feature_values_count[7d]) > 3
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Anomaly detected in feature values"
+              description: "Feature values have deviated more than 3 standard deviations from the 7-day average"
+              deviation: '{{ $value | printf "%.2f" }} standard deviations from normal'

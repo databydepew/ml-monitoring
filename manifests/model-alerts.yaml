@@ -1,0 +1,103 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: model-drift-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: model.drift.rules
+    rules:
+    # Alert on high error rate
+    - alert: HighModelErrorRate
+      expr: |
+        rate(model_errors_total[5m]) / rate(model_requests_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High model error rate detected
+        description: "Model error rate is above 10% over the last 5 minutes"
+
+    # Alert on unusual prediction distribution
+    - alert: UnusualPredictionDistribution
+      expr: |
+        abs(
+          rate(model_predictions_by_class_total{prediction="1"}[30m]) 
+          / 
+          rate(model_requests_total[30m]) 
+          - 0.5
+        ) > 0.3
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Unusual prediction distribution detected
+        description: "Model predictions are significantly deviating from expected distribution (30% from baseline)"
+
+    # # Alert on high latency
+    # - alert: HighModelLatency
+    #   expr: |
+    #     histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m])) > 0.1
+    #   for: 5m
+    #   labels:
+    #     severity: warning
+    #   annotations:
+    #     summary: High model latency detected
+    #     description: "95th percentile of model prediction latency is above 100ms"
+
+    # Alert on feature drift - Age
+    - alert: AgeDrift
+      expr: |
+        abs(
+          avg_over_time(model_feature_age[30m]) 
+          - 40
+        ) > 10
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Age distribution drift detected
+        description: "Average age has deviated more than 10 years from baseline"
+
+    # Alert on feature drift - Income
+    - alert: IncomeDrift
+      expr: |
+        abs(
+          avg_over_time(model_feature_income[30m]) 
+          - 70000
+        ) > 20000
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Income distribution drift detected
+        description: "Average income has deviated more than $20,000 from baseline"
+
+    # Alert on feature drift - Credit Score
+    - alert: CreditScoreDrift
+      expr: |
+        abs(
+          avg_over_time(model_feature_credit_score[30m]) 
+          - 700
+        ) > 50
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Credit score distribution drift detected
+        description: "Average credit score has deviated more than 50 points from baseline"
+
+  
+
+    # Test alert for quick triggering
+    - alert: TestQuickAlert
+      expr: |
+        rate(model_requests_total[1m]) > 0.2
+      for: 15s
+      labels:
+        severity: warning
+      annotations:
+        summary: Test alert triggered
+        description: "More than 5 requests received in a 10-second window"
