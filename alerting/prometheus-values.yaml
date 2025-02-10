@@ -1,0 +1,92 @@
+
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'job']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'slack'
+      routes:
+        - match:
+            severity: warning
+          receiver: 'slack'
+          group_wait: 10s
+    receivers:
+      - name: 'slack'
+        slack_configs:
+          - api_url: "https://hooks.slack.com/services/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"
+            channel: "#prom-alerts"
+            send_resolved: true
+            icon_emoji: ':warning:'
+            title: |-
+              [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+            text: |-
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Started:* {{ .StartsAt | since }}
+              {{ end }}
+
+
+prometheus:
+  enabled: true
+  service:
+    type: ClusterIP
+
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: ModelDrift
+        rules:
+          - alert: HighPredictionDeviation
+            expr: |
+              abs(
+                rate(model_prediction_values_sum[1h]) / 
+                rate(model_prediction_values_count[1h]) -
+                avg_over_time(model_prediction_values_sum[24h]) / 
+                avg_over_time(model_prediction_values_count[24h])
+              ) > 0.2
+            for: 15m
+            labels:
+              severity: info
+            annotations:
+              summary: "Model predictions deviating from baseline"
+              description: "Model predictions have deviated more than 20% from 24h baseline"
+
+          - alert: DataDriftDetected
+            expr: |
+              abs(
+                rate(feature_distribution_sum[1h]) / 
+                rate(feature_distribution_count[1h]) -
+                avg_over_time(feature_distribution_sum[24h]) / 
+                avg_over_time(feature_distribution_count[24h])
+              ) > 0.3
+            for: 15m
+            labels:
+              severity: info
+            annotations:
+              summary: "Data drift detected in feature distribution"
+              description: "Feature distribution has shifted more than 30% from 24h baseline"
+
+          - alert: PredictionMade
+            expr: rate(model_predictions_total[1m]) * 60 > 0
+            for: 10s
+            labels:
+              severity: info
+            annotations:
+              summary: "New prediction made"
+              description: "A new loan prediction was made in the last minute"
+              prediction_rate: '{{ $value | printf "%.2f" }} predictions per minute'

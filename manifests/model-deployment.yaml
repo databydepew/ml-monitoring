@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-model
+  namespace: default
+  labels:
+    app: loan-model
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loan-model
+  template:
+    metadata:
+      labels:
+        app: loan-model
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+    spec:
+      containers:
+      - name: loan-model
+        image: loan-model:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loan-model
+  namespace: default
+  labels:
+    app: loan-model
+spec:
+  selector:
+    app: loan-model
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+      name: http
+  type: NodePort

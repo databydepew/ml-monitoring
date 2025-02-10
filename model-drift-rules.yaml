@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-prometheus-rules
+  namespace: monitoring
+data:
+  model_drift.rules.yaml: |
+    groups:
+      - name: ModelDrift
+        rules:
+          - alert: HighPredictionDeviation
+            expr: |
+              abs(
+                rate(model_prediction_values_sum[1h]) /
+                rate(model_prediction_values_count[1h]) -
+                avg_over_time(model_prediction_values_sum[24h]) /
+                avg_over_time(model_prediction_values_count[24h])
+              ) > 0.2
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Model predictions deviating from baseline"
+              description: "Model predictions have deviated more than 20% from 24h baseline"
+
+          - alert: DataDriftDetected
+            expr: |
+              abs(
+                rate(feature_distribution_sum[1h]) /
+                rate(feature_distribution_count[1h]) -
+                avg_over_time(feature_distribution_sum[24h]) /
+                avg_over_time(feature_distribution_count[24h])
+              ) > 0.3
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Data drift detected in feature distribution"
+              description: "Feature distribution has shifted more than 30% from 24h baseline"
+
+          - alert: HighPredictionVolume
+            expr: rate(model_predictions_total[1m]) > 0.5
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Predictions made are high"
+              description: "test alert"
