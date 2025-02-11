@@ -2,12 +2,20 @@ from flask import Flask, request, jsonify
 import joblib
 import numpy as np
 from prometheus_client import start_http_server, Counter, Histogram, Gauge
+from collections import deque
 import os
 
 app = Flask(__name__)
 
 # Load the model
 model = joblib.load("model.pkl")
+
+# Initialize prediction tracking
+PREDICTION_WINDOW = 100  # Track last 100 predictions
+prediction_history = deque(maxlen=PREDICTION_WINDOW)
+total_correct = 0
+total_predictions = 0
+current_prediction_id = 0  # Add counter for prediction IDs
 
 # Define feature names
 feature_names = ["age", "income", "loan_amount", "loan_term", "credit_score", "employment_status", "loan_purpose"]
@@ -64,14 +72,47 @@ def predict():
         predictions_by_class.labels(prediction=str(prediction)).inc()
         model_success.inc()
 
-        return jsonify({
+        global current_prediction_id
+        response_data = {
+            "prediction_id": current_prediction_id,  # Use as reference for feedback
             "approval_status": int(prediction),
             "features_received": dict(zip(feature_names, features))
-        })
+        }
+        current_prediction_id += 1
+        return jsonify(response_data)
 
         
     except Exception as e:
         model_errors.inc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/feedback', methods=['POST'])
+def feedback():
+    try:
+        data = request.json
+        if 'prediction_id' not in data or 'actual_outcome' not in data:
+            return jsonify({"error": "Missing prediction_id or actual_outcome"}), 400
+
+        global total_correct, total_predictions
+        prediction_id = data['prediction_id']
+        actual_outcome = int(data['actual_outcome'])
+
+        # Update accuracy metrics
+        # Compare actual outcome with the predicted outcome (approval_status)
+        prediction_history.append(actual_outcome == int(data.get('predicted_outcome', -1)))
+        total_predictions += 1
+        total_correct = sum(prediction_history)
+        
+        # Update the accuracy metric
+        current_accuracy = total_correct / len(prediction_history)
+        model_accuracy.set(current_accuracy)
+
+        return jsonify({
+            "success": True,
+            "current_accuracy": current_accuracy
+        })
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

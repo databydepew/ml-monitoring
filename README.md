@@ -1,144 +1,77 @@
+# Deploying the Custom Model Inference on Minikube
 
+This guide will walk you through deploying the custom model inference on Minikube and testing the endpoints.
 
-Here's a summary of all the important commands we ran, in order:
+## Prerequisites
 
-Started Minikube and connected to Docker daemon:
-bash
-CopyInsert
-minikube start
-eval $(minikube docker-env)
-Built and deployed the model:
-bash
-CopyInsert
-docker build -t ml-monitoring:latest .
-kubectl apply -f model-deployment.yaml
-Set up port forwarding for the model service:
-bash
-CopyInsert in Terminal
-kubectl port-forward service/loan-model 5000:80
-Set up Prometheus monitoring:
-bash
-CopyInsert
-# Create monitoring namespace (if not exists)
-kubectl get namespace monitoring
+- Docker installed on your machine
+- Minikube installed on your machine
+- kubectl installed on your machine
 
-# Apply model drift rules
-kubectl apply -f model-drift-rules.yaml
+## Step 1: Build the Docker Image
 
-# Add Prometheus Helm repo
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
+- `cd` into the root directory of this repository
+- Run `docker build -t loan-model-api:latest .` to build the Docker image
 
-# Install Prometheus
-helm install prometheus prometheus-community/prometheus \
-  --namespace monitoring \
-  --set server.retention=15d \
-  --set server.persistentVolume.size=10Gi
-Set up port forwarding for Prometheus and AlertManager:
-bash
-CopyInsert
-kubectl port-forward -n monitoring svc/prometheus-server 9090:80
-kubectl port-forward -n monitoring svc/prometheus-alertmanager 9093:9093
-Test the model with sample predictions:
-bash
-CopyInsert
-curl -X POST http://localhost:5000/predict \
--H "Content-Type: application/json" \
--d '{
-  "age": 35,
-  "income": 75000,
-  "loan_amount": 25000,
-  "loan_term": 36,
-  "credit_score": 720,
-  "employment_status": 1,
-  "loan_purpose": 1
-}'
-Useful commands for monitoring and debugging:
+## Step 2: Apply the Kubernetes Deployment
 
-bash
-CopyInsert
-# Check pod status
-kubectl get pods -n monitoring
+- Run `kubectl apply -f manifests/deployment.yaml` to apply the Kubernetes deployment
+- This will create a deployment named `loan-model-api` with 1 replica
 
-# Check pod logs
-kubectl logs -n monitoring <pod-name> -c <container-name>
+## Step 3: Apply the Kubernetes Service
 
-# View service details
-kubectl get svc -n monitoring
+- Run `kubectl apply -f manifests/service.yaml` to apply the Kubernetes service
+- This will create a service named `loan-model-api` that exposes port 5000
 
-# Check Prometheus metrics
-curl http://localhost:5000/metrics
+## Step 4: Port-Forward the Service
 
-# Delete resources if needed
-kubectl delete configmap <configmap-name> -n monitoring
-helm uninstall prometheus -n monitoring
-Access URLs:
+- Run `kubectl port-forward svc/loan-model-api 5000:5000 &` to port-forward the service
+- This will allow you to access the service on `localhost:5000`
 
-Model API: http://localhost:5000
-Prometheus UI: http://localhost:9090
-AlertManager: http://localhost:9093
+## Step 5: Test the Endpoints
 
-
------
-This PromQL expression is used to detect **significant deviations** in model predictions over time. Let's break it down step by step.
-
-### **Expression:**
-```promql
-abs(
-  rate(model_prediction_values_sum[1h]) / rate(model_prediction_values_count[1h]) -
-  avg_over_time(model_prediction_values_sum[1d]) / avg_over_time(model_prediction_values_count[1d])
-) > 0.2
+- Run `curl -X GET http://localhost:5000/health` to test the health endpoint
+- Run `curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d '{"age": 35, "income": 75000, "loan_amount": 25000, "loan_term": 36, "credit_score": 720, "employment_status": 1, "loan_purpose": 1}'` to test the predict endpoint
+- Run 
 ```
+curl -X POST http://localhost:5000/feedback -H "Content-Type: application/json" -d '{"prediction_id": "123", "actual_outcome": 1}'
 
----
+```
+ to test the feedback endpoint
 
-### **Step-by-step breakdown:**
+## Step 6: Clean Up
 
-#### **1. rate(model_prediction_values_sum[1h])**
-- `rate()` computes the per-second average increase in the `model_prediction_values_sum` metric over the past **1 hour**.
-- `model_prediction_values_sum` represents the sum of all model predictions.
-- This effectively gives an estimate of how the model's prediction values are changing in real time.
+- Run `kubectl delete deployment loan-model-api` to delete the deployment
+- Run `kubectl delete svc loan-model-api` to delete the service
+------
 
-#### **2. rate(model_prediction_values_count[1h])**
-- Similar to the previous step, this computes the per-second average increase in the count of predictions over **1 hour**.
-- `model_prediction_values_count` tracks the total number of predictions made.
+installing prometheus 
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 
-#### **3. rate(model_prediction_values_sum[1h]) / rate(model_prediction_values_count[1h])**
-- This calculates the **average prediction value** over the last **1 hour**.
-- This is done by dividing the total predicted sum by the number of predictions.
 
-#### **4. avg_over_time(model_prediction_values_sum[1d])**
-- `avg_over_time()` computes the **average** of `model_prediction_values_sum` over the past **24 hours**.
 
-#### **5. avg_over_time(model_prediction_values_count[1d])**
-- Similarly, this calculates the **average** of `model_prediction_values_count` over the last **24 hours**.
+helm upgrade --install prometheus prometheus-community/prometheus \
+  --namespace monitoring \
+  --set server.persistentVolume.size=4Gi \
+  --set alertmanager.persistentVolume.size=1Gi \
+  --set server.global.scrape_interval=15s
 
-#### **6. avg_over_time(model_prediction_values_sum[1d]) / avg_over_time(model_prediction_values_count[1d])**
-- This computes the **baseline average prediction value** over the past **24 hours**.
+kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
 
-#### **7. abs(... difference ...) > 0.2**
-- This calculates the absolute difference between the **current 1-hour average prediction value** and the **baseline 24-hour average prediction value**.
-- If this difference is greater than **0.2** (20%), an alert is triggered.
+kubectl apply -f manifests/service-monitor.yaml
 
----
+kubectl port-forward -n monitoring svc/prometheus-server 9090:80 5000:5000 &
+  
+kubectl port-forward svc/loan-model-api 8001:8001  -n monitoring &
 
-### **Why is this useful?**
-- It helps detect if the model's prediction values are **deviating significantly** from the past day’s trend.
-- A sudden change in model predictions could indicate:
-  - **Model drift** (e.g., changes in model behavior).
-  - **Data drift** (e.g., incoming data distribution has shifted).
-  - **Issues with model inputs** (e.g., feature anomalies or incorrect data processing).
+The metrics being collected include:
 
----
-
-### **Example Scenarios**
-| Time Period | Avg Prediction Value | Baseline (24h) | Difference | Alert Triggered? |
-|------------|---------------------|----------------|------------|----------------|
-| Last 1 hour | **0.85** | **0.60** | **0.25 (25%)** | ✅ Yes (above 20%) |
-| Last 1 hour | **0.75** | **0.70** | **0.05 (5%)** | ❌ No (below 20%) |
-
----
-
-### **Final Summary**
-This expression detects when the model's predictions **significantly deviate (more than 20%) from the past 24-hour average**, helping to monitor **model drift and potential issues**. 🚀
-
+model_requests_total: Total number of prediction requests
+model_errors_total: Total number of prediction errors
+model_success_total: Total number of successful predictions
+model_prediction_latency_seconds: Time spent processing prediction requests
+model_prediction_values: Distribution of model predictions
+Feature value gauges for each feature
+model_predictions_by_class_total: Total predictions by class
+model_accuracy: Current accuracy of the model
+You can query these metrics in the Prometheus UI using PromQL. For example, to see the total number of requests, you can query model_requests_total.
