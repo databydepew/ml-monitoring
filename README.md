@@ -123,7 +123,35 @@ python test_app.py
 Access Prometheus UI at `http://localhost:9090` to view the following metrics:
 
 ### Model Performance Metrics
-- `model_accuracy`: Current accuracy of the model
+
+#### Model Accuracy Calculation
+The model accuracy is calculated using a rolling window approach:
+
+1. The system maintains a history of the last 100 predictions using a fixed-size deque:
+```python
+PREDICTION_WINDOW = 100  # Track last 100 predictions
+prediction_history = deque(maxlen=PREDICTION_WINDOW)
+```
+
+2. When feedback is received via the `/feedback` endpoint, it compares:
+   - `actual_outcome`: The true outcome (0 or 1)
+   - `predicted_outcome`: The model's prediction (0 or 1)
+
+3. The accuracy calculation:
+   - Each correct prediction (actual = predicted) adds a True to the history
+   - Each incorrect prediction adds a False
+   - Current accuracy = (number of True values) / (total predictions in window)
+   ```python
+   prediction_history.append(actual_outcome == predicted_outcome)
+   current_accuracy = sum(prediction_history) / len(prediction_history)
+   ```
+
+4. This rolling window approach:
+   - Provides a recent accuracy metric (last 100 predictions)
+   - Automatically drops old predictions when new ones arrive
+   - Helps identify recent model performance trends
+
+Other performance metrics:
 - `model_requests_total`: Total number of prediction requests
 - `model_success_total`: Successful predictions
 - `model_errors_total`: Failed predictions
