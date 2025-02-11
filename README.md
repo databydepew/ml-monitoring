@@ -1,77 +1,160 @@
-# Deploying the Custom Model Inference on Minikube
+# ML Model Monitoring with Prometheus
 
-This guide will walk you through deploying the custom model inference on Minikube and testing the endpoints.
+This project demonstrates how to deploy and monitor a machine learning model using Kubernetes and Prometheus. The model predicts loan approvals and tracks various metrics including model accuracy and prediction latency.
 
 ## Prerequisites
 
-- Docker installed on your machine
-- Minikube installed on your machine
-- kubectl installed on your machine
+- Docker
+- Kubernetes cluster (Kind or Minikube)
+- kubectl
+- Helm 3.x
+- Python 3.8+
 
-## Step 1: Build the Docker Image
+## Step 1: Kubernetes Setup
 
-- `cd` into the root directory of this repository
-- Run `docker build -t loan-model-api:latest .` to build the Docker image
-
-## Step 2: Apply the Kubernetes Deployment
-
-- Run `kubectl apply -f manifests/deployment.yaml` to apply the Kubernetes deployment
-- This will create a deployment named `loan-model-api` with 1 replica
-
-## Step 3: Apply the Kubernetes Service
-
-- Run `kubectl apply -f manifests/service.yaml` to apply the Kubernetes service
-- This will create a service named `loan-model-api` that exposes port 5000
-
-## Step 4: Port-Forward the Service
-
-- Run `kubectl port-forward svc/loan-model-api 5000:5000 &` to port-forward the service
-- This will allow you to access the service on `localhost:5000`
-
-## Step 5: Test the Endpoints
-
-- Run `curl -X GET http://localhost:5000/health` to test the health endpoint
-- Run `curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d '{"age": 35, "income": 75000, "loan_amount": 25000, "loan_term": 36, "credit_score": 720, "employment_status": 1, "loan_purpose": 1}'` to test the predict endpoint
-- Run 
+1. Create a monitoring namespace:
+```bash
+kubectl create namespace monitoring
 ```
-curl -X POST http://localhost:5000/feedback -H "Content-Type: application/json" -d '{"prediction_id": "123", "actual_outcome": 1}'
 
+## Step 2: Install Prometheus
+
+1. Add Prometheus Helm repository:
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
 ```
- to test the feedback endpoint
 
-## Step 6: Clean Up
-
-- Run `kubectl delete deployment loan-model-api` to delete the deployment
-- Run `kubectl delete svc loan-model-api` to delete the service
-------
-
-installing prometheus 
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
-
-
-
+2. Install Prometheus:
+```bash
 helm upgrade --install prometheus prometheus-community/prometheus \
   --namespace monitoring \
   --set server.persistentVolume.size=4Gi \
   --set alertmanager.persistentVolume.size=1Gi \
   --set server.global.scrape_interval=15s
+```
 
+3. Install ServiceMonitor CRD:
+```bash
 kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+```
 
+## Step 3: Deploy the Application
+
+1. Build and load the Docker image:
+```bash
+# Build the image
+docker build -t loan-model-api:latest .
+
+# Load into Kind (if using Kind)
+kind load docker-image loan-model-api:latest
+```
+
+2. Deploy the application:
+```bash
+kubectl apply -f manifests/deployment.yaml
+```
+
+3. Configure monitoring:
+```bash
 kubectl apply -f manifests/service-monitor.yaml
+```
 
-kubectl port-forward -n monitoring svc/prometheus-server 9090:80 5000:5000 &
-  
-kubectl port-forward svc/loan-model-api 8001:8001  -n monitoring &
+## Step 4: Access the Services
 
-The metrics being collected include:
+1. Port forward the application and metrics:
+```bash
+# Application and metrics endpoints
+kubectl port-forward -n monitoring svc/loan-model-api 5000:5000 8001:8001 &
 
-model_requests_total: Total number of prediction requests
-model_errors_total: Total number of prediction errors
-model_success_total: Total number of successful predictions
-model_prediction_latency_seconds: Time spent processing prediction requests
-model_prediction_values: Distribution of model predictions
-Feature value gauges for each feature
-model_predictions_by_class_total: Total predictions by class
-model_accuracy: Current accuracy of the model
-You can query these metrics in the Prometheus UI using PromQL. For example, to see the total number of requests, you can query model_requests_total.
+# Prometheus UI
+kubectl port-forward -n monitoring svc/prometheus-server 9090:80 &
+```
+
+## Step 5: Test the Application
+
+### Manual Testing
+
+1. Health check:
+```bash
+curl -X GET http://localhost:5000/health
+```
+
+2. Make a prediction:
+```bash
+curl -X POST http://localhost:5000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": 35,
+    "income": 75000,
+    "loan_amount": 25000,
+    "loan_term": 36,
+    "credit_score": 720,
+    "employment_status": 1,
+    "loan_purpose": 1
+  }'
+```
+
+3. Provide feedback:
+```bash
+curl -X POST http://localhost:5000/feedback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prediction_id": "0",
+    "actual_outcome": 1,
+    "predicted_outcome": 1
+  }'
+```
+
+### Automated Testing
+
+1. Install test requirements:
+```bash
+pip install -r test_requirements.txt
+```
+
+2. Run the test script:
+```bash
+python test_app.py
+```
+
+## Step 6: Monitor Metrics
+
+Access Prometheus UI at `http://localhost:9090` to view the following metrics:
+
+### Model Performance Metrics
+- `model_accuracy`: Current accuracy of the model
+- `model_requests_total`: Total number of prediction requests
+- `model_success_total`: Successful predictions
+- `model_errors_total`: Failed predictions
+
+### Prediction Metrics
+- `model_prediction_latency_seconds`: Time spent processing prediction request
+- `model_prediction_values`: Distribution of model predictions
+- `model_predictions_by_class_total`: Total predictions by class
+
+### Feature Metrics
+- Feature value gauges for each input feature (age, income, etc.)
+
+## Step 7: Clean Up
+
+1. Stop port forwarding:
+```bash
+pkill -f "kubectl port-forward"
+```
+
+2. Remove application:
+```bash
+kubectl delete -f manifests/deployment.yaml
+kubectl delete -f manifests/service-monitor.yaml
+```
+
+3. Uninstall Prometheus:
+```bash
+helm uninstall prometheus -n monitoring
+```
+
+4. Delete namespace:
+```bash
+kubectl delete namespace monitoring
+```
