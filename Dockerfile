@@ -6,13 +6,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy model and application files
-COPY app/app.py .
+# Copy application files
+COPY app/ ./app/
 COPY model.pkl .
+
+# Create directory for credentials
+RUN mkdir -p /root/.config/gcloud
 
 # Expose ports for Flask and Prometheus metrics
 EXPOSE 5000
 EXPOSE 8001
 
-# Run the Flask application
-CMD ["python", "app.py"]
+# Set Python path and run the Flask application
+ENV PYTHONPATH=/app
+CMD ["python", "-m", "app.app"]

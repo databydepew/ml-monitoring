@@ -6,7 +6,7 @@ metadata:
   labels:
     app: loan-model-api
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: loan-model-api
@@ -27,6 +27,14 @@ spec:
         env:
         - name: PROMETHEUS_METRICS_PORT
           value: "8001"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/etc/bigquery/credentials.json"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "mdepew-assets"
+        volumeMounts:
+        - name: bigquery-creds
+          mountPath: "/etc/bigquery"
+          readOnly: true
         readinessProbe:
           httpGet:
             path: /health
@@ -39,6 +47,17 @@ spec:
             port: 5000
           initialDelaySeconds: 15
           periodSeconds: 20
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: bigquery-creds
+        secret:
+          secretName: bigquery-credentials
 ---
 apiVersion: v1
 kind: Service
@@ -51,10 +70,9 @@ spec:
   selector:
     app: loan-model-api
   ports:
-  - name: http
-    port: 5000
-    targetPort: 5000
-  - name: metrics
-    port: 8001
-    targetPort: 8001
-  type: ClusterIP
+  - port: 5000
+    targetPort: http
+    name: http
+  - port: 8001
+    targetPort: metrics
+    name: metrics

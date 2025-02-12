@@ -10,15 +10,20 @@ class LoanModelTester:
         self.predictions = []  # Store predictions for feedback
 
     def generate_loan_application(self) -> Dict[str, Any]:
-        """Generate a random loan application."""
+        """Generate a random loan application with features matching BigQuery schema."""
         return {
-            "age": random.randint(21, 65),
-            "income": random.randint(30000, 150000),
-            "loan_amount": random.randint(5000, 50000),
-            "loan_term": random.choice([12, 24, 36, 48, 60]),
+            "interest_rate": round(random.uniform(2.0, 8.0), 2),
+            "loan_amount": random.randint(50000, 1000000),
+            "loan_balance": random.randint(40000, 900000),
+            "loan_to_value_ratio": round(random.uniform(0.5, 0.95), 2),
             "credit_score": random.randint(580, 850),
-            "employment_status": random.randint(0, 1),  # 0: unemployed, 1: employed
-            "loan_purpose": random.randint(0, 2)  # 0: personal, 1: business, 2: education
+            "debt_to_income_ratio": round(random.uniform(0.2, 0.6), 2),
+            "income": random.randint(50000, 300000),
+            "loan_term": random.choice([180, 360]),  # 15 or 30 years in months
+            "loan_age": random.randint(0, 120),  # months
+            "home_value": random.randint(100000, 2000000),
+            "current_rate": round(random.uniform(2.5, 8.5), 2),
+            "rate_spread": round(random.uniform(-2.0, 2.0), 2)
         }
 
     def make_prediction(self, application: Dict[str, Any]) -> Dict[str, Any]:
@@ -42,14 +47,15 @@ class LoanModelTester:
         income = application["income"]
         loan_amount = application["loan_amount"]
         
-        # Calculate probability of actual approval based on features
-        prob_approval = (
-            0.4 * (credit_score - 580) / (850 - 580) +  # Credit score weight
-            0.4 * (income - 30000) / (150000 - 30000) +  # Income weight
-            0.2 * (1 - loan_amount / 50000)  # Loan amount weight (inverse)
+        # Calculate probability of actual refinance based on features
+        prob_refinance = (
+            0.3 * (credit_score - 580) / (850 - 580) +  # Credit score weight
+            0.2 * (income - 50000) / (250000) +  # Income weight
+            0.2 * (1 - debt_to_income_ratio / 0.6) +  # DTI weight (inverse)
+            0.3 * (rate_spread / 2.0)  # Rate spread weight (higher spread = higher refinance probability)
         )
         
-        actual_outcome = 1 if random.random() < prob_approval else 0
+        actual_outcome = 1 if random.random() < prob_refinance else 0
         
         try:
             response = requests.post(
@@ -79,7 +85,7 @@ class LoanModelTester:
             # Get prediction
             prediction = self.make_prediction(application)
             if prediction:
-                print(f"Prediction: {'Approved' if prediction['approval_status'] == 1 else 'Denied'}")
+                print(f"Prediction: {'Refinance' if prediction['refinance_status'] == 1 else 'No Refinance'}")
                 
                 # Provide feedback
                 feedback = self.provide_feedback(prediction)
