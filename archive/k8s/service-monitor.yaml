@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: loan-model-monitor
+  namespace: monitoring
+  labels:
+    app: loan-model-api
+    release: prometheus  # This matches the Prometheus operator's label selector
+spec:
+  selector:
+    matchLabels:
+      app: loan-model-api  # This should match your service labels
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  endpoints:
+    - port: metrics      # This should match the name of the port in your service
+      path: /metrics
+      interval: 15s      # Scrape interval
+      scheme: http

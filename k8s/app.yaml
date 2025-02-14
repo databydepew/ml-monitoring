@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refinance-predictor
+  namespace: refinance-predictor
+  labels:
+    app: refinance-predictor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: refinance-predictor
+  template:
+    metadata:
+      labels:
+        app: refinance-predictor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "5001"
+    spec:
+      serviceAccountName: gke-workload-ksa  # Use the existing GKE Workload Identity service account
+      containers:
+      - name: refinance-predictor
+        image: us-central1-docker.pkg.dev/mdepew-assets/vertex-ai-images/refinance-model:latest
+        ports:
+        - containerPort: 5001
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 5001
+          initialDelaySeconds: 15
+          periodSeconds: 20
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refinance-predictor
+spec:
+  selector:
+    app: refinance-predictor
+  ports:
+  - port: 80
+    targetPort: 5001
+  type: LoadBalancer

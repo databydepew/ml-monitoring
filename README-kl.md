@@ -406,4 +406,107 @@ def monitor_categorical_drift(reference_dist: np.ndarray,
 
 These methods ensure proper handling of categorical features in distribution monitoring, accounting for different types of categorical data and their specific characteristics.
 
+## Monitoring Model Accuracy Drift with KL Divergence
+
+While traditional accuracy metrics are useful, KL divergence can provide early warnings of model accuracy degradation by monitoring the distribution of correct vs. incorrect predictions over time.
+
+### 1. Computing Accuracy Distribution
+
+```python
+def compute_accuracy_distribution(y_true: np.ndarray,
+                                y_pred: np.ndarray,
+                                window_size: int = 1000) -> np.ndarray:
+    """Compute distribution of correct/incorrect predictions"""
+    # Create sliding window of accuracy values
+    correct_predictions = (y_true == y_pred).astype(int)
+    
+    # Compute proportion of correct/incorrect predictions
+    n_correct = np.sum(correct_predictions[-window_size:])
+    n_total = len(correct_predictions[-window_size:])
+    
+    # Return [incorrect_rate, correct_rate]
+    return np.array([(n_total - n_correct) / n_total, n_correct / n_total])
+
+# Example: Reference accuracy distribution from validation set
+ref_accuracy_dist = compute_accuracy_distribution(val_y_true, val_y_pred)
+```
+
+### 2. Monitoring Accuracy Drift
+
+```python
+def monitor_accuracy_drift(reference_dist: np.ndarray,
+                          production_dist: np.ndarray,
+                          threshold: float = 0.1) -> dict:
+    """Monitor shifts in accuracy distribution"""
+    # Compute KL divergence
+    kl_div = entropy(reference_dist, production_dist)
+    
+    # Compute actual accuracy difference
+    acc_diff = abs(reference_dist[1] - production_dist[1])
+    
+    return {
+        'kl_divergence': kl_div,
+        'accuracy_difference': acc_diff,
+        'drift_detected': kl_div > threshold
+    }
+
+# Example usage in production
+production_accuracy_dist = compute_accuracy_distribution(prod_y_true, prod_y_pred)
+results = monitor_accuracy_drift(ref_accuracy_dist, production_accuracy_dist)
+```
+
+### 3. Advantages of Distribution-Based Accuracy Monitoring
+
+1. **Early Warning System**:
+   - Detects subtle shifts in accuracy patterns before they become significant
+   - More sensitive than simple accuracy thresholds
+
+2. **Window-Based Analysis**:
+   - Captures temporal patterns in model performance
+   - Reduces noise through aggregation
+
+3. **Multiple Metrics**:
+   ```python
+def compute_detailed_accuracy_distribution(y_true: np.ndarray,
+                                         y_pred: np.ndarray,
+                                         y_prob: np.ndarray,
+                                         bins: int = 10) -> dict:
+    """Compute detailed accuracy distribution metrics"""
+    # Confidence distribution
+    confidence_hist, _ = np.histogram(y_prob, bins=bins, density=True)
+    
+    # Accuracy by confidence level
+    correct = (y_true == y_pred)
+    acc_by_conf = []
+    for i in range(bins):
+        mask = (y_prob >= i/bins) & (y_prob < (i+1)/bins)
+        if np.any(mask):
+            acc_by_conf.append(np.mean(correct[mask]))
+        else:
+            acc_by_conf.append(0)
+    
+    return {
+        'confidence_distribution': confidence_hist,
+        'accuracy_by_confidence': np.array(acc_by_conf),
+        'overall_distribution': compute_accuracy_distribution(y_true, y_pred)
+    }
+```
+
+4. **Integration with Prometheus**:
+```python
+# Prometheus metrics for accuracy monitoring
+accuracy_drift_gauge = Gauge(
+    'model_accuracy_drift',
+    'KL divergence between reference and current accuracy distributions'
+)
+
+accuracy_by_confidence_gauge = Gauge(
+    'model_accuracy_by_confidence',
+    'Accuracy for different confidence levels',
+    ['confidence_bin']
+)
+```
+
+This approach provides a more nuanced view of model accuracy degradation, allowing for early detection of performance issues and better understanding of where and how the model's accuracy is changing.
+
 -------

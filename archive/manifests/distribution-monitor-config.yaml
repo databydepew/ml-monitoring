@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: distribution-monitor-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    window_size: 1000
+    significance_level: 0.05
+    n_bootstrap: 1000
+    metrics:
+      port: 8001
+      path: /metrics
+    bigquery:
+      project_id: mdepew-assets
+      dataset_id: synthetic
+      table_id: synthetic_mortgage_data
+      target_column: refinance
+      feature_columns:
+        - interest_rate
+        - loan_amount
+        - loan_balance
+        - loan_to_value_ratio
+        - credit_score
+        - debt_to_income_ratio
+        - income
+        - loan_term
+        - loan_age
+        - home_value
+        - current_rate
+        - rate_spread
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-model-api
+  namespace: monitoring
+  labels:
+    app: loan-model-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loan-model-api
+  template:
+    metadata:
+      labels:
+        app: loan-model-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+    spec:
+      containers:
+      - name: loan-model-api
+        image: loan-model-api:latest
+        ports:
+        - containerPort: 5000
+          name: http
+        - containerPort: 8001
+          name: metrics
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/model
+        - name: reference-data
+          mountPath: /app/data
+        - name: config
+          mountPath: /app/config
+        env:
+        - name: PROMETHEUS_METRICS_PORT
+          value: "8001"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 15
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage
+      - name: reference-data
+        persistentVolumeClaim:
+          claimName: reference-data
+      - name: config
+        configMap:
+          name: distribution-monitor-config
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: reference-data
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loan-model-api
+  namespace: monitoring
+  labels:
+    app: loan-model-api
+spec:
+  ports:
+  - port: 5000
+    targetPort: http
+    name: http
+  - port: 8001
+    targetPort: metrics
+    name: metrics
+  selector:
+    app: loan-model-api
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: loan-model-monitor
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: loan-model-api
+  endpoints:
+  - port: metrics
+    interval: 15s
+  - port: http
+    path: /metrics
+    interval: 15s

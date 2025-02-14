@@ -1,0 +1,78 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: refinance-model-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+  - name: refinance.rules
+    rules:
+    # Feature Drift Alerts
+    - alert: CriticalFeatureDrift
+      expr: refinance_model_feature_kl_divergence > 3
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Critical feature drift detected"
+        description: "Feature {{ $labels.feature }} has KL divergence of {{ $value }}, which is above critical threshold (3.0)"
+
+    - alert: HighFeatureDrift
+      expr: refinance_model_feature_kl_divergence > 2
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High feature drift detected"
+        description: "Feature {{ $labels.feature }} has KL divergence of {{ $value }}, which is above warning threshold (2.0)"
+
+    # Model Performance Alerts
+    - alert: LowModelAccuracy
+      expr: refinance_model_accuracy < 0.95
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Model accuracy below threshold"
+        description: "Model accuracy is {{ $value }}, which is below the acceptable threshold (0.95)"
+
+    - alert: HighPredictionErrorRate
+      expr: prediction_error_rate > 0.1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High prediction error rate"
+        description: "Prediction error rate is {{ $value }}, which is above threshold (0.1)"
+
+    # Distribution Monitoring Alerts
+    - alert: MultipleFeaturesDrifting
+      expr: count(refinance_model_feature_kl_divergence > 2) > 3
+      for: 15m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Multiple features showing drift"
+        description: "{{ $value }} features are showing significant drift (KL > 2)"
+
+    # Rate Spread Monitoring
+    - alert: HighRateSpreadDrift
+      expr: refinance_model_feature_kl_divergence{feature="rate_spread"} > 2
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Rate spread distribution shifting"
+        description: "Rate spread distribution has KL divergence of {{ $value }}"
+
+    # Prediction Distribution Alert
+    - alert: PredictionDistributionShift
+      expr: refinance_model_feature_kl_divergence{feature="predictions"} > 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Prediction distribution shifting"
+        description: "Prediction distribution has KL divergence of {{ $value }}"
