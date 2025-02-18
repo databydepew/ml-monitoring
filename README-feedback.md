@@ -166,9 +166,4 @@ To visualize the metrics, you can create a Grafana dashboard with the following 
    - Track validation and processing errors
    - Alert on high error rates
 
-## Contributing
-When contributing to the feedback endpoint, please:
-1. Add tests for any new functionality
-2. Update this documentation
-3. Follow the existing error handling patterns
-4. Consider backward compatibility
+

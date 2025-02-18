@@ -690,26 +690,8 @@ Other performance metrics:
 ### Feature Metrics
 - Feature value gauges for each input feature (age, income, etc.)
 
-## Step 7: Clean Up
+## Evalutate vs Feedback 
 
-1. Stop port forwarding:
-```bash
-pkill -f "kubectl port-forward"
-```
-
-2. Remove application:
-```bash
-kubectl delete -f manifests/deployment.yaml
-kubectl delete -f manifests/service-monitor.yaml
-```
-
-3. Uninstall Prometheus:
-```bash
-helm uninstall prometheus -n monitoring
-```
-
-4. Delete namespace:
-```bash
-kubectl delete namespace monitoring
-```
+- /evaluate: Batch evaluation of model performance using historical data.
+- /feedback: Real-time recording of individual prediction outcomes.
 

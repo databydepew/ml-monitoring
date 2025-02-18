@@ -30,23 +30,21 @@ class ModelEvaluator:
         Returns:
             DataFrame containing ground truth data
         """
+        where_clause = ""
+        if start_date:
+            where_clause = f"WHERE timestamp >= '{start_date}'"
+            if end_date:
+                where_clause += f" AND timestamp <= '{end_date}'"
+        elif end_date:
+            where_clause = f"WHERE timestamp <= '{end_date}'"
+            
         query = f"""
         SELECT 
-            interest_rate,
-            loan_amount,
-            loan_balance,
-            loan_to_value_ratio,
-            credit_score,
-            debt_to_income_ratio,
-            income,
-            loan_term,
-            loan_age,
-            home_value,
-            current_rate,
-            rate_spread,
-            refinanced AS actual_outcome,
-            DATETIME(timestamp) as prediction_time
+           *
         FROM `{self.project_id}.{self.dataset_id}.{self.table_id}`
+        {where_clause}
+        ORDER BY timestamp DESC
+        LIMIT 1000
         """
         
         if start_date and end_date:
@@ -69,13 +67,20 @@ class ModelEvaluator:
         Returns:
             dict containing evaluation metrics
         """
+        # merged_data = pd.merge(
+        #     model_predictions,
+        #     ground_truth,
+        #     on=['interest_rate', 'loan_amount', 'loan_balance', 
+        #         'loan_to_value_ratio', 'credit_score', 'debt_to_income_ratio',
+        #         'income', 'loan_term', 'loan_age', 'home_value', 'current_rate',
+        #         'rate_spread'],
+        #     how='inner'
+        # )
+        
         merged_data = pd.merge(
             model_predictions,
-            ground_truth,
-            on=['interest_rate', 'loan_amount', 'loan_balance', 
-                'loan_to_value_ratio', 'credit_score', 'debt_to_income_ratio',
-                'income', 'loan_term', 'loan_age', 'home_value', 'current_rate',
-                'rate_spread'],
+            ground_truth[['timestamp', 'refinance']],  # only keep relevant columns
+            on='timestamp',
             how='inner'
         )
         
@@ -181,6 +186,7 @@ class ModelEvaluator:
         model_predictions = self.client.query(predictions_query).to_dataframe()
         
         if model_predictions.empty:
+            print(ground_truth)
             self.logger.warning("No model predictions found for the specified time range")
             return None
         

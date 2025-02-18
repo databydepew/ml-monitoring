@@ -45,11 +45,19 @@ MODEL_CONFIG = {
 }
 
 # Initialize BigQuery client and model evaluator
-bq_client = bigquery.Client()
+try:
+    bq_client = bigquery.Client(project='mdepew-assets')
+    # Test the connection
+    bq_client.get_dataset('synthetic')
+    logger.info("Successfully connected to BigQuery")
+except Exception as e:
+    logger.error(f"Failed to initialize BigQuery client: {str(e)}")
+    raise
+
 evaluator = ModelEvaluator(
-    project_id=MODEL_CONFIG['project_id'],
-    dataset_id=MODEL_CONFIG['dataset_id'],
-    table_id='ground_truth_data'
+    project_id="mdepew-assets",
+    dataset_id="synthetic",
+    table_id="model_predictions"
 )
 
 def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics):
@@ -61,20 +69,38 @@ def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics
         confidence: Prediction confidence
         drift_metrics: Dict of drift metrics
     """
-    row = {
-        'timestamp': datetime.now().isoformat(),
-        'prediction': prediction,
-        'confidence': confidence,
-        **features,  # Unpack all features
-        'drift_metrics': json.dumps(drift_metrics)
-    }
-    
-    table_id = f"{MODEL_CONFIG['project_id']}.{MODEL_CONFIG['dataset_id']}.{MODEL_CONFIG['predictions_table']}"
-    
-    errors = bq_client.insert_rows_json(
-        table_id,
-        [row],
-    )
+    try:
+        # Format the row data
+        row = {
+            'timestamp': datetime.now().isoformat(),
+            'prediction': int(prediction),  # Ensure integer
+            'confidence': float(confidence),  # Ensure float
+            **{k: float(v) if isinstance(v, (int, float)) else v for k, v in features.items()},  # Convert numeric types
+            'drift_metrics': json.dumps(drift_metrics)
+        }
+        logger.info(f"Prepared row for BigQuery: {row}")
+        
+        # Construct table ID
+        table_id = f"{MODEL_CONFIG['project_id']}.{MODEL_CONFIG['dataset_id']}.{MODEL_CONFIG['predictions_table']}"
+        logger.info(f"Writing to BigQuery table: {table_id}")
+        
+        # Attempt to insert row
+        errors = bq_client.insert_rows_json(
+            table_id,
+            [row],
+        )
+        
+        if errors:
+            logger.error(f"BigQuery insert errors: {errors}")
+            raise Exception(f"Failed to insert rows: {errors}")
+        else:
+            logger.info("Successfully wrote prediction to BigQuery")
+            
+    except Exception as e:
+        logger.error(f"Error writing to BigQuery: {str(e)}")
+        logger.error(f"Row data: {row}")
+        logger.error(f"Table ID: {table_id}")
+        raise
     
     if errors:
         logger.error(f"Failed to insert prediction into BigQuery: {errors}")
@@ -86,7 +112,11 @@ logger.info(f"Started Prometheus metrics server on port {metrics_port}")
 
 
 # Load the model
-model = joblib.load(MODEL_CONFIG['model_path'])
+try:
+    model = joblib.load(MODEL_CONFIG['model_path'])
+except FileNotFoundError:
+    logger.warning("Model file not found. Some endpoints may not work.")
+    model = None
 logger.info(f"Model loaded from {MODEL_CONFIG['model_path']}")
 
 # Example function for predictions
@@ -293,11 +323,13 @@ def evaluate_model():
         
         # Generate evaluation report
         report = evaluator.generate_evaluation_report(hours_back=hours_back)
+        print(report)
         
-        if not report:
+        if not report or not report.get('performance_metrics'):
             return jsonify({
                 'error': 'Not enough data for evaluation',
-                'required_samples': min_samples
+                'required_samples': min_samples,
+                'available_samples': report.get('sample_sizes', {}).get('ground_truth', 0) if report else 0
             }), 400
             
         if report['sample_sizes']['ground_truth'] < min_samples:
@@ -418,6 +450,8 @@ def predict():
         
         # Store prediction in BigQuery
         features_dict = dict(zip(MODEL_CONFIG['feature_columns'], features))
+        print(features_dict)
+
         store_prediction_in_bigquery(features_dict, prediction, confidence, drift_metrics)
         
         response = {

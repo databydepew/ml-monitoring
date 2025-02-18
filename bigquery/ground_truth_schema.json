@@ -2,7 +2,7 @@
   "schema": {
     "fields": [
       {"name": "timestamp", "type": "TIMESTAMP", "mode": "REQUIRED"},
-      {"name": "refinanced", "type": "BOOLEAN", "mode": "REQUIRED", "description": "Actual outcome - whether the loan was refinanced"},
+      {"name": "refinance", "type": "BOOLEAN", "mode": "REQUIRED", "description": "Actual outcome - whether the loan was refinanced"},
       {"name": "interest_rate", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "loan_amount", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "loan_balance", "type": "FLOAT", "mode": "REQUIRED"},
@@ -24,6 +24,6 @@
     "field": "timestamp"
   },
   "clustering": {
-    "fields": ["refinanced", "credit_score", "verification_date"]
+    "fields": ["refinance", "credit_score", "verification_date"]
   }
 }
