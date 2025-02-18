@@ -1,0 +1,29 @@
+{
+  "schema": {
+    "fields": [
+      {"name": "timestamp", "type": "TIMESTAMP", "mode": "REQUIRED"},
+      {"name": "prediction", "type": "INTEGER", "mode": "REQUIRED"},
+      {"name": "confidence", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "interest_rate", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "loan_amount", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "loan_balance", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "loan_to_value_ratio", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "credit_score", "type": "INTEGER", "mode": "REQUIRED"},
+      {"name": "debt_to_income_ratio", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "income", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "loan_term", "type": "INTEGER", "mode": "REQUIRED"},
+      {"name": "loan_age", "type": "INTEGER", "mode": "REQUIRED"},
+      {"name": "home_value", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "current_rate", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "rate_spread", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "drift_metrics", "type": "STRING", "mode": "NULLABLE", "description": "JSON string containing KL divergence and KS test metrics"}
+    ]
+  },
+  "timePartitioning": {
+    "type": "DAY",
+    "field": "timestamp"
+  },
+  "clustering": {
+    "fields": ["prediction", "credit_score"]
+  }
+}

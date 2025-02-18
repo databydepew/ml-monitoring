@@ -6,21 +6,31 @@ A comprehensive MLOps monitoring solution for a refinance prediction model deplo
 
 ### Model Monitoring
 - Real-time performance tracking (accuracy, precision, recall, F1)
-- Feature drift detection using multiple methods:
-  - KL divergence
-  - Kolmogorov-Smirnov test
-  - Jensen-Shannon divergence
-  - Population Stability Index (PSI)
+- Feature drift detection using multiple statistical methods:
+  - KL divergence with sliding window analysis
+  - Kolmogorov-Smirnov test with p-value tracking
+  - Configurable drift thresholds (warning/critical)
 - Prediction distribution monitoring
 - Feature importance tracking
 - Latency monitoring
 
+### Real-time Evaluation
+- On-demand model evaluation via REST API
+- Hourly performance tracking
+- Comprehensive evaluation reports including:
+  - Classification metrics
+  - Feature drift analysis
+  - Sample size validation
+  - Confidence score distribution
+
 ### Data Integration
-- BigQuery integration for reference data
+- BigQuery integration for:
+  - Ground truth data comparison
+  - Prediction storage and tracking
+  - Feature distribution analysis
 - Automated data quality checks
 - Feature statistics logging
-- Correlation analysis
-- Data freshness monitoring
+- Real-time drift metrics storage
 
 ### Infrastructure
 - GKE deployment with Workload Identity
@@ -50,6 +60,61 @@ A comprehensive MLOps monitoring solution for a refinance prediction model deplo
 - `kubectl`
 - `helm` (v3+)
 - `terraform` (v1.0+)
+
+## API Endpoints
+
+### Model Prediction
+```bash
+POST /predict
+Content-Type: application/json
+
+{
+    "interest_rate": 3.5,
+    "loan_amount": 300000,
+    "loan_balance": 290000,
+    "loan_to_value_ratio": 0.8,
+    "credit_score": 750,
+    "debt_to_income_ratio": 0.35,
+    "income": 120000,
+    "loan_term": 30,
+    "loan_age": 2,
+    "home_value": 375000,
+    "current_rate": 4.5,
+    "rate_spread": 1.0
+}
+```
+
+Response includes:
+- Prediction (0/1)
+- Confidence score
+- Feature drift metrics
+- KL divergence values
+- KS test statistics
+
+### Model Evaluation
+```bash
+GET /evaluate?hours_back=1&min_samples=10
+```
+
+Parameters:
+- `hours_back`: Evaluation period in hours (default: 1)
+- `min_samples`: Minimum required samples (default: 10)
+
+Returns comprehensive evaluation report including:
+- Performance metrics
+- Drift analysis
+- Sample statistics
+- Confidence distributions
+
+### Metrics
+```bash
+GET /metrics
+```
+Prometheus metrics endpoint exposing:
+- Prediction counts and latencies
+- Feature distributions
+- Drift metrics
+- Performance metrics
 
 ## Quick Start
 
@@ -87,5 +152,14 @@ helm install prometheus prometheus-community/prometheus -n prometheus -f prometh
 5. Deploy Model Service:
 ```bash
 kubectl apply -f k8s/app.yaml
+```
+
+6. Create BigQuery Tables:
+```bash
+# Create predictions table
+bq mk --table $PROJECT_ID:ml_monitoring.model_predictions predictions_schema.json
+
+# Create ground truth table (if not exists)
+bq mk --table $PROJECT_ID:ml_monitoring.ground_truth_data ground_truth_schema.json
 ```
 

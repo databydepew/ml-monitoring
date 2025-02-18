@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: classification
-        image: us-central1-docker.pkg.dev/mdepew-assets/vertex-ai-images/classification:latest
+        image: us-central1-docker.pkg.dev/mdepew-assets/vertex-ai-images/adv-monitoring:latest
         ports:
         - name: http
           containerPort: 5000
