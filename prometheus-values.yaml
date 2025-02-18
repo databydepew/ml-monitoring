@@ -1,0 +1,19 @@
+server:
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  
+  persistentVolume:
+    enabled: true
+    size: 8Gi
+  
+  service:
+    type: LoadBalancer
+    port: 80
+  
+  extraScrapeConfigs: |
+    - job_name: 'refinance-predictor'
+      static_configs:
+        - targets: ['localhost:8000']
+      metrics_path: /metrics
+      scrape_interval: 5s

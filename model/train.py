@@ -84,6 +84,20 @@ feature_importance = feature_importance.sort_values('importance', ascending=Fals
 print("\nFeature Importance:")
 print(feature_importance)
 
+# get feature names
+feature_names = model.feature_names_in_
+print("\nFeature Names:")
+print(feature_names)
+
+# get feature importance
+feature_importance = pd.DataFrame({
+    'feature': feature_names,
+    'importance': model.feature_importances_
+})
+feature_importance = feature_importance.sort_values('importance', ascending=False)
+print("\nFeature Importance:")
+print(feature_importance)
+
 # Save the trained model
 logger.info("Saving model...")
 joblib.dump(model, "model.pkl")

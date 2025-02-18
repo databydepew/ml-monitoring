@@ -21,28 +21,6 @@ from collections import deque
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BIGQUERY_CONFIG = {
-    'project_id': 'mdepew-assets',
-    'dataset_id': 'synthetic',
-    'table_id': 'synthetic_mortgage_data',
-    'target_column': 'refinance',
-    'feature_columns': [
-        'interest_rate',
-        'loan_amount',
-        'loan_balance',
-        'loan_to_value_ratio',
-        'credit_score',
-        'debt_to_income_ratio',
-        'income',
-        'loan_term',
-        'loan_age',
-        'home_value',
-        'current_rate',
-        'rate_spread'
-    ]
-}
-
-
 @dataclass
 class DistributionStats:
     feature_name: str
@@ -52,6 +30,7 @@ class DistributionStats:
     window_size: int
     is_significant: bool
 
+from .bigquery_reference import BigQueryReference
 
 class DistributionMonitor:
     """Monitors distribution shifts using KL divergence"""
@@ -92,7 +71,7 @@ class DistributionMonitor:
         window_size: int = 1000,
         significance_level: float = 0.05,
         n_bootstrap: int = 1000,
-        bigquery_config: Optional[dict] = BIGQUERY_CONFIG
+        bigquery_config: Optional[dict] = None
     ):
         """
         Initialize the distribution monitor
@@ -106,15 +85,19 @@ class DistributionMonitor:
         self.window_size = window_size
         
         # Initialize BigQuery reference if config provided
-
-            
-        self.project_id=bigquery_config['project_id'],
-        self.dataset_id=bigquery_config['dataset_id'],
-        self.table_id=bigquery_config['table_id'],
-        self.feature_columns=bigquery_config['feature_columns'],
-        self.target_column=bigquery_config['target_column']
-        self.reference_data = self.bq_reference.get_reference_sample(1000)
-
+        self.bq_reference = None
+        if bigquery_config:
+            self.bq_reference = BigQueryReference(
+                project_id=bigquery_config['project_id'],
+                dataset_id=bigquery_config['dataset_id'],
+                table_id=bigquery_config['table_id'],
+                feature_columns=bigquery_config['feature_columns'],
+                target_column=bigquery_config['target_column']
+            )
+            # Get a small sample as reference data
+            self.reference_data = self.bq_reference.get_reference_sample(1000)
+        else:
+            self.reference_data = reference_data
             
         if self.reference_data is None:
             raise ValueError("Either reference_data or bigquery_config must be provided")
@@ -354,20 +337,13 @@ class PredictionDistributionMonitor(DistributionMonitor):
 
 def setup_distribution_monitoring(
     reference_data: pd.DataFrame,
-    reference_predictions: np.ndarray,
-    window_size: int = 50,
-    significance_level: float = 0.1,
-    n_bootstrap: int = 500
+    reference_predictions: np.ndarray
 ) -> Tuple[DistributionMonitor, PredictionDistributionMonitor]:
-    """Setup both feature and prediction distribution monitoring
-    
-    Args:
-        reference_data: Training data used as reference
-        reference_predictions: Predictions from training set
-        window_size: Size of sliding window (default: 50)
-        significance_level: Threshold for significance (default: 0.1)
-        n_bootstrap: Number of bootstrap samples (default: 500)
-    """
+    # More sensitive monitoring parameters
+    window_size = 50  # Smaller window to detect changes faster
+    significance_level = 0.1  # More sensitive threshold (was 0.05)
+    n_bootstrap = 500  # Fewer bootstraps for faster updates
+    """Setup both feature and prediction distribution monitoring"""
     
     feature_monitor = DistributionMonitor(
         reference_data=reference_data,

@@ -6,11 +6,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create model directory and copy model file
+
 # Copy the rest of the application
 COPY . .
 
 # Expose the application and metrics ports
-EXPOSE 5001 8000
+EXPOSE 5000 8001 9090
 
-# Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "app:app"]
+# Run with Flask
+CMD ["python", "app.py"]

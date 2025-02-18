@@ -1,129 +1,91 @@
 # ML Model Monitoring Platform
 
-A robust MLOps platform for deploying and monitoring machine learning models in production, with advanced distribution monitoring and drift detection capabilities.
+A comprehensive MLOps monitoring solution for a refinance prediction model deployed on Google Kubernetes Engine (GKE) with advanced distribution monitoring and drift detection capabilities.
 
 ## Features
 
-- **Real-time Model Monitoring**
-  - Feature drift detection
-  - Prediction distribution monitoring
-  - Model performance tracking
-  - Latency monitoring
+### Model Monitoring
+- Real-time performance tracking (accuracy, precision, recall, F1)
+- Feature drift detection using multiple methods:
+  - KL divergence
+  - Kolmogorov-Smirnov test
+  - Jensen-Shannon divergence
+  - Population Stability Index (PSI)
+- Prediction distribution monitoring
+- Feature importance tracking
+- Latency monitoring
 
-- **Infrastructure**
-  - Kubernetes-based deployment
-  - Prometheus metrics integration
-  - Grafana dashboards
-  - Scalable architecture
+### Data Integration
+- BigQuery integration for reference data
+- Automated data quality checks
+- Feature statistics logging
+- Correlation analysis
+- Data freshness monitoring
 
-- **Advanced Analytics**
-  - Distribution monitoring with KL divergence
-  - Reference data integration with BigQuery
-  - Automated alerts for drift detection
-  - Performance degradation tracking
+### Infrastructure
+- GKE deployment with Workload Identity
+- Prometheus metrics and alerting
+- Custom recording rules
+- Comprehensive alert system
+- Scalable architecture
 
-## Getting Started
+### Monitoring Stack
+- Real-time metrics collection
+- Customizable alert thresholds
+- Historical data comparison
+- Automated drift detection
 
-### Prerequisites
+## Prerequisites
 
-- Docker
-- Kubernetes cluster (Kind or Minikube)
-- kubectl
-- Helm 3.x
-- Python 3.10+
-- Google Cloud account with BigQuery access (optional)
-- Google Cloud SDK (optional)
+### Google Cloud Platform
+- GCP account with enabled APIs:
+  - Google Kubernetes Engine API
+  - BigQuery API
+  - IAM API
+- Project ID: mdepew-assets
+- Region: us-central1
 
-### Quick Start
+### Local Tools
+- `gcloud` CLI
+- `kubectl`
+- `helm` (v3+)
+- `terraform` (v1.0+)
 
-1. Clone the repository:
+## Quick Start
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)
+
+1. Configure GCP:
 ```bash
-git clone https://github.com/databydepew/ml-monitoring.git
-cd ml-monitoring
+gcloud auth login
+export PROJECT_ID="mdepew-assets"
+gcloud config set project $PROJECT_ID
 ```
 
-2. Create Kubernetes namespace:
+2. Deploy Infrastructure:
 ```bash
-kubectl create namespace monitoring
+cd terraform
+terraform init
+terraform apply
 ```
 
-3. Set up the monitoring stack:
+3. Configure kubectl:
 ```bash
-./create-cluster.sh
+gcloud container clusters get-credentials ml-monitoring-cluster \
+    --region us-central1 \
+    --project $PROJECT_ID
 ```
 
-4. Deploy the model:
+4. Deploy Monitoring Stack:
 ```bash
-kubectl apply -f k8s/
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+kubectl create namespace prometheus
+helm install prometheus prometheus-community/prometheus -n prometheus -f prometheus/values.yaml
 ```
 
-## Monitoring Components
-
-### 1. Model Metrics
-- Prediction latency
-- Request volume
-- Error rates
-- Model confidence scores
-
-### 2. Distribution Monitoring
-- Feature drift detection using KL divergence
-- Prediction distribution analysis
-- Automated drift alerts
-- Historical distribution comparisons
-
-### 3. Performance Tracking
-- Accuracy metrics
-- Feature importance
-- Model degradation detection
-- A/B test monitoring
-
-## Project Structure
-
-```
-.
-├── app/                    # Main application code
-├── k8s/                   # Kubernetes manifests
-├── grafana/               # Grafana dashboards
-├── model/                 # ML model artifacts
-├── monitoring/            # Monitoring configuration
-├── tests/                 # Test suite
-└── scripts/               # Utility scripts
-```
-
-## Metrics and Dashboards
-
-Access the monitoring dashboards:
-- Grafana: http://localhost:3000
-- Prometheus: http://localhost:9090
-
-Key metrics available:
-- `model_prediction_latency_seconds`
-- `model_prediction_values`
-- `model_predictions_by_class_total`
-- `feature_distribution_metrics`
-
-## Testing
-
-Run the test suite:
+5. Deploy Model Service:
 ```bash
-python -m pytest tests/
+kubectl apply -f k8s/app.yaml
 ```
 
-Simulate model decay:
-```bash
-python simulate_decay.py
-```
-
-## Documentation
-
-Detailed documentation is available in:
-- [Monitoring Guide](README-monitoring.md)
-- [Challenges and Solutions](README-challenges.md)
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines and submit pull requests.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

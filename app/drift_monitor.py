@@ -14,6 +14,8 @@ from datetime import datetime
 import logging
 from prometheus_client import Gauge, Histogram
 from collections import deque
+from google.cloud import bigquery
+# from bq_logger import BigQueryLogger
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,7 +86,8 @@ class DriftMonitor:
         self,
         reference_data: pd.DataFrame,
         window_size: int = 50,
-        significance_level: float = 0.1
+        significance_level: float = 0.1,
+        project_id: str = BIGQUERY_CONFIG['project_id']
     ):
         """
         Initialize drift monitor
@@ -97,6 +100,17 @@ class DriftMonitor:
         self.reference_data = reference_data
         self.window_size = window_size
         self.significance_level = significance_level
+        
+        # Initialize BigQuery logger
+        self.bq_logger = BigQueryLogger(
+            f"{BIGQUERY_CONFIG['project_id']}.{BIGQUERY_CONFIG['dataset_id']}.{BIGQUERY_CONFIG['table_id']}"
+        )
+        
+        # Log initial reference data metrics
+        self.bq_logger.log_all_metrics(
+            reference_data,
+            datetime.now()  # Initial reference timestamp
+        )
         
         # Initialize sliding windows for each feature
         self.windows = {
@@ -145,6 +159,11 @@ class DriftMonitor:
         return np.mean(np.array(bootstrap_kls) >= observed_kl)
     
     def check_drift(self, production_data: pd.DataFrame) -> Dict[str, DriftResult]:
+        # # Log production data metrics
+        # self.bq_logger.log_all_metrics(
+        #     production_data,
+        #     datetime.now()
+        # )
         """
         Check for drift in new production data
         
@@ -259,7 +278,8 @@ def setup_monitoring(
     reference_data: pd.DataFrame,
     reference_predictions: np.ndarray,
     window_size: int = 50,
-    significance_level: float = 0.1
+    significance_level: float = 0.1,
+    project_id: str = BIGQUERY_CONFIG['project_id']
 ) -> tuple[DriftMonitor, PredictionDriftMonitor]:
     """
     Set up feature and prediction drift monitoring
@@ -277,14 +297,16 @@ def setup_monitoring(
     feature_monitor = DriftMonitor(
         reference_data=reference_data,
         window_size=window_size,
-        significance_level=significance_level
+        significance_level=significance_level,
+        project_id=project_id
     )
     
     # Set up prediction monitoring
     prediction_monitor = PredictionDriftMonitor(
         reference_data=pd.DataFrame({'predictions': reference_predictions}),
         window_size=window_size,
-        significance_level=significance_level
+        significance_level=significance_level,
+        project_id=project_id
     )
     
     logger.info("Drift monitoring initialized successfully")

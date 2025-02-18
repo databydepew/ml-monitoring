@@ -1,0 +1,20 @@
+groups:
+  - name: refinance_model
+    rules:
+      - record: refinance:request_rate_5m
+        expr: rate(refinance_prediction_requests_total[5m])
+      
+      - record: refinance:error_rate_5m
+        expr: rate(refinance_prediction_errors_total[5m])
+      
+      - record: refinance:success_rate_percent_5m
+        expr: (1 - (rate(refinance_prediction_errors_total[5m]) / rate(refinance_prediction_requests_total[5m]))) * 100
+      
+      - record: refinance:latency_95th_5m
+        expr: histogram_quantile(0.95, rate(refinance_prediction_latency_seconds_bucket[5m]))
+      
+      - record: refinance:avg_latency_5m
+        expr: rate(refinance_prediction_latency_seconds_sum[5m]) / rate(refinance_prediction_latency_seconds_count[5m])
+      
+      - record: refinance:prediction_probability_median_5m
+        expr: histogram_quantile(0.5, rate(refinance_prediction_probability_bucket[5m]))

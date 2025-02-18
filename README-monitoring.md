@@ -1,114 +1,328 @@
-# ML Model Monitoring with Prometheus and Distribution Monitoring
+# Refinance Prediction Model Monitoring Guide
 
-This project demonstrates how to deploy and monitor a machine learning model using Kubernetes and Prometheus. The model predicts loan refinancing approvals and includes advanced monitoring features such as:
+This guide details the monitoring setup for our refinance prediction model deployed on GKE. The model predicts whether a mortgage holder is likely to refinance based on various loan and financial features.
 
-- Real-time distribution monitoring for feature drift detection
-- Prediction distribution monitoring
-- Model performance tracking
-- Integration with BigQuery for reference data
-- Prometheus metrics for all monitoring aspects
+## Model Overview
 
-## Prerequisites
+### Model Type
+- Binary Classification (Refinance Prediction)
+- Implementation: Random Classifier (for demonstration)
+- Endpoint: Exposed on port 5001
 
-- Docker
-- Kubernetes cluster (Kind or Minikube)
-- kubectl
-- Helm 3.x
-- Python 3.10+
-- Google Cloud account with BigQuery access (optional)
-- Google Cloud SDK (optional)
+### Data Source
+- BigQuery Table: `synthetic.synthetic_mortgage_data`
+- Features:
+  1. `interest_rate`: Current interest rate of the loan
+  2. `loan_amount`: Original loan amount
+  3. `loan_balance`: Current loan balance
+  4. `loan_to_value_ratio`: Ratio of loan to property value
+  5. `credit_score`: Borrower's credit score
+  6. `debt_to_income_ratio`: Debt-to-income ratio
+  7. `income`: Annual income
+  8. `loan_term`: Original loan term
+  9. `loan_age`: Age of the loan
+  10. `home_value`: Current home value
+  11. `current_rate`: Current market rate
+  12. `rate_spread`: Difference between loan rate and market rate
+- Target: `refinance` (binary: 0/1)
 
-## Step 1: Kubernetes Setup
+## Monitoring Components
 
-1. Create a monitoring namespace:
-```bash
-kubectl create namespace monitoring
+### 1. Model Monitor (`model_monitor.py`)
+
+Primary monitoring service that tracks model performance and health:
+
+#### Performance Metrics
+- `refinance_model_accuracy`: Overall model accuracy
+- `refinance_model_precision`: Precision for refinance predictions
+- `refinance_model_recall`: Recall for refinance predictions
+- `refinance_model_f1`: F1 score
+- `ground_truth_refinance_rate`: Actual refinance rate
+- `prediction_error_rate`: Rate of incorrect predictions
+
+#### Feature Monitoring
+- Feature importance tracking
+- Distribution analysis
+- Data quality checks
+- Periodic BigQuery data validation
+
+### 2. Drift Monitor (`drift_monitor.py`)
+
+Specialized drift detection service:
+
+#### Feature Drift Detection
+- KL divergence tracking
+- Kolmogorov-Smirnov tests
+- Jensen-Shannon divergence
+- Population Stability Index (PSI)
+- P-value based significance testing
+
+#### Sliding Window Analysis
+- Window Size: 50 samples
+- Significance Level: 0.1
+- Continuous reference distribution updates
+
+## Project Structure
+
+```
+.
+├── app/                    # Main application code
+├── k8s/                   # Kubernetes manifests
+├── grafana/               # Grafana dashboards
+├── model/                 # ML model artifacts
+├── monitoring/            # Monitoring configuration
+├── tests/                 # Test suite
+└── scripts/               # Utility scripts
 ```
 
-## Step 2: Install Prometheus
+## Prometheus Metrics
 
-1. Add Prometheus Helm repository:
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
+### Model Performance
+```
+refinance_model_accuracy
+refinance_model_precision
+refinance_model_recall
+refinance_model_f1
+refinance_prediction_latency_seconds
 ```
 
-2. Install Prometheus:
-```bash
-helm upgrade --install prometheus prometheus-community/prometheus \
-  --namespace monitoring \
-  --set server.persistentVolume.size=4Gi \
-  --set alertmanager.persistentVolume.size=1Gi \
-  --set server.global.scrape_interval=15s
+### Feature Monitoring
+```
+refinance_feature_statistics{feature_name="<feature>",statistic="<stat>"}
+refinance_feature_drift{feature_name="<feature>"}
+refinance_bigquery_row_count
+refinance_bigquery_data_freshness_hours
+refinance_bigquery_null_values{feature_name="<feature>"}
 ```
 
-3. Install ServiceMonitor CRD:
-```bash
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+### Drift Detection
+```
+refinance_model_feature_kl_divergence{feature="<feature>"}
+refinance_model_feature_drift_p_value{feature="<feature>"}
+refinance_model_feature_drift_detected{feature="<feature>"}
+refinance_model_prediction_distribution_shift
 ```
 
-## Step 3: Deploy the Application
+## Alerts Configuration
 
-1. Build and load the Docker image:
+### Model Performance Alerts
+1. High Model Latency
+   - Threshold: > 1s for 5 minutes
+   - Severity: Warning
+
+2. High Error Rate
+   - Threshold: > 5% for 5 minutes
+   - Severity: Critical
+
+3. Model Health Check
+   - Condition: health == 0
+   - Severity: Critical
+
+### Data Quality Alerts
+1. BigQuery Connection Failure
+   - Condition: Any errors in 5 minutes
+   - Severity: Critical
+
+2. High BigQuery Latency
+   - Threshold: > 10s
+   - Severity: Warning
+
+3. Feature Drift
+   - Condition: KS statistic > threshold
+   - Severity: Warning
+
+## Accessing Monitoring
+
+### Prometheus UI
 ```bash
-# Build the image
-docker build -t loan-model-api:latest .
-
-# Load into Kind (if using Kind)
-kind load docker-image loan-model-api:latest
+kubectl port-forward svc/prometheus-server 9090:80 -n prometheus
+# Access: http://localhost:9090
 ```
 
-2. Deploy the application:
+### AlertManager
 ```bash
-kubectl apply -f manifests/deployment.yaml
+kubectl port-forward svc/prometheus-alertmanager 9093 -n prometheus
+# Access: http://localhost:9093
 ```
 
-3. Configure monitoring:
-```bash
-kubectl apply -f manifests/service-monitor.yaml
-```
+## Troubleshooting
 
-## Step 4: Access the Services
+### Common Issues
+1. BigQuery Connection Failures
+   - Check service account permissions
+   - Verify Workload Identity setup
+   - Check network connectivity
 
-1. Port forward the application and metrics:
-```bash
-# Application and metrics endpoints
-kubectl port-forward -n monitoring svc/loan-model-api 5000:5000 8001:8001 &
+2. High Latency
+   - Check resource utilization
+   - Verify BigQuery query optimization
+   - Check for concurrent request volume
 
-# Prometheus UI
-kubectl port-forward -n monitoring svc/prometheus-server 9090:80 &
-```
+3. Drift Detection Issues
+   - Verify reference data availability
+   - Check sliding window size
+   - Validate statistical test parameters
 
-## Step 5: Test the Application
+## Best Practices
 
-### Manual Testing
+1. Regular Monitoring
+   - Check alerts daily
+   - Review drift metrics weekly
+   - Validate data quality monthly
 
-1. Health check:
-```bash
-curl -X GET http://localhost:5000/health
-```
+2. Model Updates
+   - Track performance degradation
+   - Monitor feature importance changes
+   - Document all model versions
 
-2. Make a prediction:
-```bash
-curl -X POST http://localhost:5000/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "interest_rate": 3.5,
-    "loan_amount": 300000,
-    "loan_balance": 290000,
-    "loan_to_value_ratio": 0.8,
-    "credit_score": 750,
-    "debt_to_income_ratio": 0.3,
-    "income": 120000,
-    "loan_term": 30,
-    "loan_age": 2,
-    "home_value": 375000,
-    "current_rate": 4.2,
-    "rate_spread": 0.7
-  }'
-```
+3. Alert Management
+   - Set appropriate thresholds
+   - Configure alert routing
+   - Maintain runbooks for each alert
 
-3. Provide feedback:
+## BigQuery Integration
+
+### Data Source Configuration
+- Table: `synthetic.synthetic_mortgage_data`
+- Project: `mdepew-assets`
+- Region: `us-central1`
+
+### Data Ingestion
+1. Training Data
+   ```sql
+   SELECT 
+     interest_rate, loan_amount, loan_balance,
+     loan_to_value_ratio, credit_score,
+     debt_to_income_ratio, income, loan_term,
+     loan_age, home_value, current_rate,
+     rate_spread, refinance
+   FROM synthetic.synthetic_mortgage_data
+   WHERE training_set = TRUE
+   ```
+
+2. Production Monitoring
+   ```sql
+   SELECT *
+   FROM synthetic.synthetic_mortgage_data
+   WHERE TIMESTAMP_TRUNC(prediction_time, HOUR) = TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), HOUR)
+   ```
+
+### Monitoring Tables
+
+1. Feature Statistics
+   ```
+   monitoring.feature_statistics
+   ├── feature_name (STRING)
+   ├── mean (FLOAT64)
+   ├── std_dev (FLOAT64)
+   ├── min (FLOAT64)
+   ├── max (FLOAT64)
+   ├── timestamp (TIMESTAMP)
+   └── window_size (INT64)
+   ```
+
+2. Drift Metrics
+   ```
+   monitoring.drift_metrics
+   ├── feature_name (STRING)
+   ├── kl_divergence (FLOAT64)
+   ├── ks_statistic (FLOAT64)
+   ├── p_value (FLOAT64)
+   ├── drift_detected (BOOLEAN)
+   └── timestamp (TIMESTAMP)
+   ```
+
+3. Model Performance
+   ```
+   monitoring.model_metrics
+   ├── accuracy (FLOAT64)
+   ├── precision (FLOAT64)
+   ├── recall (FLOAT64)
+   ├── f1_score (FLOAT64)
+   ├── prediction_count (INT64)
+   └── timestamp (TIMESTAMP)
+   ```
+
+### Data Quality Checks
+
+1. Freshness Check
+   ```sql
+   SELECT
+     TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(prediction_time), HOUR) as data_delay_hours
+   FROM synthetic.synthetic_mortgage_data
+   ```
+
+2. Completeness Check
+   ```sql
+   SELECT
+     feature_name,
+     COUNT(*) - COUNT(feature_value) as null_count,
+     COUNT(*) as total_count
+   FROM monitoring.feature_statistics
+   GROUP BY feature_name
+   ```
+
+### Workload Identity Setup
+
+1. Create Service Account
+   ```bash
+   gcloud iam service-accounts create ml-monitoring-sa \
+     --project=mdepew-assets
+   ```
+
+2. Grant BigQuery Access
+   ```bash
+   gcloud projects add-iam-policy-binding mdepew-assets \
+     --member="serviceAccount:ml-monitoring-sa@mdepew-assets.iam.gserviceaccount.com" \
+     --role="roles/bigquery.dataViewer"
+   ```
+
+3. Configure Kubernetes Service Account
+   ```bash
+   kubectl create serviceaccount ml-monitoring-ksa -n monitoring
+   ```
+
+4. Bind Service Accounts
+   ```bash
+   gcloud iam service-accounts add-iam-policy-binding \
+     ml-monitoring-sa@mdepew-assets.iam.gserviceaccount.com \
+     --role roles/iam.workloadIdentityUser \
+     --member "serviceAccount:mdepew-assets.svc.id.goog[monitoring/ml-monitoring-ksa]"
+   ```
+
+### Query Optimization
+
+1. Partitioning
+   - Tables are partitioned by `prediction_time`
+   - Reduces query costs and improves performance
+   - Enables efficient historical analysis
+
+2. Clustering
+   - Clustered by `feature_name` for monitoring tables
+   - Improves query performance for feature-specific analysis
+   - Reduces data scanned per query
+
+3. Materialized Views
+   - Used for commonly accessed metrics
+   - Updated every 60 minutes
+   - Reduces computation overhead
+
+### Cost Management
+
+1. Query Optimization
+   - Use partitioned tables
+   - Implement appropriate clustering
+   - Leverage materialized views
+
+2. Data Retention
+   - Raw data: 90 days
+   - Aggregated metrics: 1 year
+   - Feature statistics: 6 months
+
+3. Query Quotas
+   - Daily quota: 2TB
+   - Concurrent queries: 100
+   - Rate limits monitored via Prometheus
 ```bash
 curl -X POST http://localhost:5000/feedback \
   -H "Content-Type: application/json" \

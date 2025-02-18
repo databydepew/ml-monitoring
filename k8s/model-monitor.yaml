@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-monitor
-  namespace: refinance-predictor
+  namespace: monitoring
   labels:
     app: model-monitor
 spec:
@@ -17,7 +17,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics"
-        prometheus.io/port: "8000"
+        prometheus.io/port: "8000"  # Ensure this matches the port your app uses for metrics
     spec:
       serviceAccountName: gke-workload-ksa  # Use the existing GKE Workload Identity service account
       containers:
@@ -39,9 +39,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: model-monitor
-  namespace: refinance-predictor
-  labels:
-    app: model-monitor
+  namespace: monitoring
 spec:
   selector:
     app: model-monitor

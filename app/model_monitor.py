@@ -45,6 +45,30 @@ FEATURE_DRIFT = Gauge('feature_drift', 'Feature drift score', ['feature', 'metri
 PREDICTION_DISTRIBUTION = Gauge('prediction_distribution', 'Distribution of prediction probabilities', ['bucket'])
 FEATURE_IMPORTANCE = Gauge('feature_importance', 'Feature importance scores', ['feature'])
 
+
+
+from google.cloud import bigquery
+
+def test_bq_connection():
+    try:
+        # Create a BigQuery client
+        client = bigquery.Client()
+        # get the column names
+        columns = ', '.join(BIGQUERY_CONFIG['feature_columns'])
+        # Perform a simple query to test the connection
+        query_job = client.query(f"SELECT {columns}")
+        result = query_job.result()  # Wait for the job to complete
+
+        for row in result:
+            print(f"Query result: {row}")
+
+        print("BigQuery connection successful!")
+    except Exception as e:
+        print(f"Error connecting to BigQuery: {e}")
+
+
+
+
 class ModelMonitor:
     def __init__(self, model_path='model.pkl', monitoring_interval_minutes=60):
         self.client = bigquery.Client()
@@ -94,6 +118,7 @@ class ModelMonitor:
         LIMIT 10000
         """
         historical_data = self.client.query(query).to_dataframe()
+        historical_data = historical_data.reindex(columns=BIGQUERY_CONFIG['feature_columns'], axis=1)
         
         if len(historical_data) == 0:
             logger.warning("No historical data available for feature drift calculation")
@@ -177,10 +202,14 @@ class ModelMonitor:
             try:
                 # Fetch recent data
                 df = self.fetch_recent_data()
+                logger.info(f"Fetched {len(df)} records")
+                feature_columns = ['interest_rate', 'loan_amount', 'loan_balance', 'loan_to_value_ratio',
+                                    'credit_score', 'debt_to_income_ratio', 'income', 'loan_term', 'loan_age',
+                                    'home_value', 'current_rate', 'rate_spread']
                 
                 if len(df) > 0:
                     # Split features and target
-                    X = df[BIGQUERY_CONFIG['feature_columns']]
+                    X = df[feature_columns]
                     y_true = df[BIGQUERY_CONFIG['target_column']]
                     
                     # Make predictions
@@ -228,8 +257,8 @@ class ModelMonitor:
 if __name__ == '__main__':
     # Start Prometheus metrics server with the correct content type
     start_http_server(8000)
-    logger.info("Started Prometheus metrics server on port 8000")
-    
-    # Create and start the model monitor
+    logger.info("Started Prometheus metrics server on port 8001")
+
+    # # Create and start the model monitor
     monitor = ModelMonitor()
     monitor.monitor()
