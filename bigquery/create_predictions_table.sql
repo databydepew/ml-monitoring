@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS `mdepew-assets.synthetic.model_predictions`
+CREATE TABLE IF NOT EXISTS `mdepew-assets.synthetic.model_prediction_feedback`
 (
   timestamp TIMESTAMP,
   prediction INT64,
@@ -16,6 +16,6 @@ CREATE TABLE IF NOT EXISTS `mdepew-assets.synthetic.model_predictions`
   current_rate FLOAT64,
   rate_spread FLOAT64,
   drift_metrics STRING,
-  refinance INT64
+  actual INT64
 )
 PARTITION BY DATE(timestamp);

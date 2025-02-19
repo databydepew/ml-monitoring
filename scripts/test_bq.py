@@ -2,7 +2,7 @@ from google.cloud import bigquery
 client = bigquery.Client(project='mdepew-assets')
 table_id = 'mdepew-assets.synthetic.model_predictions'
 rows = [{
-    'timestamp': '2025-02-18T21:34:38.322076',
+    'timestamp': datetime.now(),
     'prediction': 1,
     'confidence': 0.81,
     'interest_rate': 4.5,

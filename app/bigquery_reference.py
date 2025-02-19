@@ -170,3 +170,6 @@ class BigQueryReference:
         results = self.client.query(query).result()
         counts = [row.count for row in results]
         return np.array(counts) / sum(counts)
+
+
+

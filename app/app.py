@@ -62,7 +62,7 @@ evaluator = ModelEvaluator(
     table_id="model_predictions"
 )
 
-def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics):
+def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics, actual=None):
     """Store prediction details in BigQuery for later comparison.
     
     Args:
@@ -76,6 +76,7 @@ def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics
         row = {
             'timestamp': datetime.now().isoformat(),
             'prediction': int(prediction),  # Ensure integer
+            'actual': int(actual),  # Ensure integer
             'confidence': float(confidence),  # Ensure float
             **{k: float(v) if isinstance(v, (int, float)) else v for k, v in features.items()},  # Convert numeric types
             'drift_metrics': json.dumps(drift_metrics)

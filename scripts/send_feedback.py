@@ -73,6 +73,49 @@ def main():
     print("\n=== Sending Sample Feedback ===")
     send_sample_feedback()
 
+
+def write_to_bigquery(data):
+    from google.cloud import bigquery
+    import logging
+    from datetime import datetime
+
+    # Initialize the BigQuery client
+    bq_client = bigquery.Client(project='mdepew-assets')
+
+    table_id = 'mdepew-assets.synthetic.model_prediction_feedback'  # Update with your actual table ID
+
+    # Prepare the row to insert
+    row = {
+        'timestamp': datetime.now().isoformat(),
+        'prediction': data['prediction'],
+        'actual': data['actual'],
+        'confidence': data.get('confidence', None),  # Optional field
+        'drift_metrics': data.get('drift_metrics', None) , # Optional field
+        'loan_term': data['loan_term'],
+        'interest_rate': data['interest_rate'],
+        'loan_amount': data['loan_amount'],
+        'loan_balance': data['loan_balance'],
+        'loan_to_value_ratio': data['loan_to_value_ratio'],
+        'credit_score': data['credit_score'],
+        'debt_to_income_ratio': data['debt_to_income_ratio'],
+        'income': data['income'],
+        'loan_age': data['loan_age'],
+        'home_value': data['home_value'],
+        'current_rate': data['current_rate'],
+        'rate_spread': data['rate_spread'],
+        
+    }
+
+    try:
+        # Insert the row into BigQuery
+        errors = bq_client.insert_rows_json(table_id, [row])
+        if errors:
+            logging.error(f"Failed to write to BigQuery: {errors}")
+        else:
+            logging.info("Successfully wrote feedback data to BigQuery.")
+    except Exception as e:
+        logging.error(f"Error writing to BigQuery: {str(e)}")
+
 if __name__ == "__main__":
     print("Starting feedback simulation...")
     print("This will send 20 feedback requests with varying accuracy patterns")

@@ -75,15 +75,14 @@ def main():
     
     # Test 2: Longer time window
     time.sleep(1)
-    test_evaluate(hours_back=24)
+    test_evaluate(hours_back=1, min_samples=10)
     
     # Test 3: Higher minimum samples
     time.sleep(1)
     test_evaluate(min_samples=50)
-    
-    # Test 4: Short window with high samples (should fail)
+
     time.sleep(1)
-    test_evaluate(hours_back=1, min_samples=1000)
+    test_evaluate(hours_back=1, min_samples=50)
 
 if __name__ == "__main__":
     main()

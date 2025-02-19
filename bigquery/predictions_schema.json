@@ -16,6 +16,7 @@
       {"name": "home_value", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "current_rate", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "rate_spread", "type": "FLOAT", "mode": "REQUIRED"},
+      {"name": "actual", "type": "INTEGER", "mode": "REQUIRED"},
       {"name": "drift_metrics", "type": "STRING", "mode": "NULLABLE", "description": "JSON string containing KL divergence and KS test metrics"}
     ]
   },
