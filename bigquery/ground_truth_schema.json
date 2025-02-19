@@ -16,6 +16,7 @@
       {"name": "current_rate", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "rate_spread", "type": "FLOAT", "mode": "REQUIRED"},
       {"name": "data_source", "type": "STRING", "mode": "REQUIRED", "description": "Source of the ground truth data"},
+      {"name": "refinance", "type": "INTEGER", "mode": "REQUIRED", "description": "Actual outcome - whether the loan was refinanced (0 or 1)"},
       {"name": "verification_date", "type": "DATE", "mode": "REQUIRED", "description": "Date when the refinance outcome was verified"}
     ]
   },

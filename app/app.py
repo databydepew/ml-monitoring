@@ -41,8 +41,10 @@ MODEL_CONFIG = {
     ],
     'model_path': os.getenv('MODEL_PATH', 'model.pkl'),
     'prediction_threshold': float(os.getenv('PREDICTION_THRESHOLD', '0.5')),
-    'monitoring_window': int(os.getenv('MONITORING_WINDOW', '100'))
+    'monitoring_window': int(os.getenv('MONITORING_WINDOW', '100')),
+
 }
+project_id = "mdepew-assets"
 
 # Initialize BigQuery client and model evaluator
 try:
@@ -81,8 +83,7 @@ def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics
         logger.info(f"Prepared row for BigQuery: {row}")
         
         # Construct table ID
-        table_id = f"{MODEL_CONFIG['project_id']}.{MODEL_CONFIG['dataset_id']}.{MODEL_CONFIG['predictions_table']}"
-        logger.info(f"Writing to BigQuery table: {table_id}")
+        table_id = f"{project_id}.synthetic.model_predictions"
         
         # Attempt to insert row
         errors = bq_client.insert_rows_json(
@@ -311,55 +312,52 @@ def get_metrics():
 
 @app.route('/evaluate')
 def evaluate_model():
-    """Evaluate model performance against ground truth data.
-    
-    Query Parameters:
-        hours_back (int): Number of hours to look back for evaluation (default: 1)
-        min_samples (int): Minimum number of samples required (default: 10)
-    """
+    """Evaluate model performance against ground truth data."""
     try:
         hours_back = int(request.args.get('hours_back', 1))
         min_samples = int(request.args.get('min_samples', 10))
-        
-        # Generate evaluation report
+
+        # Call the evaluation report with the updated parameter
         report = evaluator.generate_evaluation_report(hours_back=hours_back)
-        print(report)
         
-        if not report or not report.get('performance_metrics'):
-            return jsonify({
-                'error': 'Not enough data for evaluation',
-                'required_samples': min_samples,
-                'available_samples': report.get('sample_sizes', {}).get('ground_truth', 0) if report else 0
-            }), 400
-            
-        if report['sample_sizes']['ground_truth'] < min_samples:
-            return jsonify({
-                'error': 'Insufficient ground truth samples',
-                'available_samples': report['sample_sizes']['ground_truth'],
-                'required_samples': min_samples
-            }), 400
-            
-        # Add evaluation metrics to Prometheus
-        if report['performance_metrics']:
-            metrics.accuracy.set(report['performance_metrics']['classification_report']['accuracy'])
-            metrics.precision.set(report['performance_metrics']['classification_report']['1']['precision'])
-            metrics.recall.set(report['performance_metrics']['classification_report']['1']['recall'])
-            metrics.f1_score.set(report['performance_metrics']['classification_report']['1']['f1-score'])
-        
-        return jsonify({
-            'status': 'success',
-            'evaluation_report': report,
-            'metadata': {
-                'evaluation_time': datetime.now().isoformat(),
-                'hours_evaluated': hours_back,
-                'model_version': os.getenv('MODEL_VERSION', 'unknown')
-            }
-        })
+        # Handle the report as needed...
         
     except Exception as e:
         logger.error(f"Evaluation error: {str(e)}")
-        return jsonify({'error': 'Internal server error during evaluation'}), 500
+        return jsonify({"error": "Internal server error during evaluation"}), 500
 
+        
+    if not report or not report.get('performance_metrics'):
+        return jsonify({
+            'error': 'Not enough data for evaluation',
+            'required_samples': min_samples,
+            'available_samples': report.get('sample_sizes', {}).get('ground_truth', 0) if report else 0
+        }), 400
+        
+    if report['sample_sizes']['ground_truth'] < min_samples:
+        return jsonify({
+            'error': 'Insufficient ground truth samples',
+            'available_samples': report['sample_sizes']['ground_truth'],
+            'required_samples': min_samples
+        }), 400
+        
+    # Add evaluation metrics to Prometheus
+    if report['performance_metrics']:
+        metrics.accuracy.set(report['performance_metrics']['classification_report']['accuracy'])
+        metrics.precision.set(report['performance_metrics']['classification_report']['1']['precision'])
+        metrics.recall.set(report['performance_metrics']['classification_report']['1']['recall'])
+        metrics.f1_score.set(report['performance_metrics']['classification_report']['1']['f1-score'])
+    
+    return jsonify({
+        'status': 'success',
+        'evaluation_report': report,
+        'metadata': {
+            'evaluation_time': datetime.now().isoformat(),
+            'hours_evaluated': hours_back,
+            'model_version': os.getenv('MODEL_VERSION', 'unknown')
+        }
+    })
+    
 @app.route('/predict', methods=['POST'])
 def predict():
     """Make a prediction and record metrics."""
@@ -450,7 +448,6 @@ def predict():
         
         # Store prediction in BigQuery
         features_dict = dict(zip(MODEL_CONFIG['feature_columns'], features))
-        print(features_dict)
 
         store_prediction_in_bigquery(features_dict, prediction, confidence, drift_metrics)
         
@@ -473,14 +470,13 @@ def feedback():
     """Record actual outcomes and update performance metrics."""
     try:
         data = request.json
-        if not all(k in data for k in ['prediction', 'actual']):
-            return jsonify({"error": "Missing required fields"}), 400
+        print(data)
+
             
         prediction = int(data['prediction'])
         actual = int(data['actual'])
         
-        if prediction not in (0, 1) or actual not in (0, 1):
-            return jsonify({"error": "Values must be 0 or 1"}), 400
+
         
         # Update confusion matrix metrics
         if actual == 1 and prediction == 1:

@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import logging
 from datetime import datetime, timedelta
+import scipy.stats as stats
 
 class ModelEvaluator:
     def __init__(self, project_id, dataset_id, table_id):
@@ -21,42 +22,46 @@ class ModelEvaluator:
         self.logger = logging.getLogger(__name__)
 
     def get_ground_truth_data(self, start_date=None, end_date=None):
-        """Query ground truth data from BigQuery.
+        """Query ground truth data from BigQuery."""
+        where_clauses = []
         
-        Args:
-            start_date: Optional start date for filtering
-            end_date: Optional end date for filtering
-            
-        Returns:
-            DataFrame containing ground truth data
-        """
-        where_clause = ""
         if start_date:
-            where_clause = f"WHERE timestamp >= '{start_date}'"
-            if end_date:
-                where_clause += f" AND timestamp <= '{end_date}'"
-        elif end_date:
-            where_clause = f"WHERE timestamp <= '{end_date}'"
-            
+            where_clauses.append(f"timestamp >= '{start_date}'")
+        if end_date:
+            where_clauses.append(f"timestamp <= '{end_date}'")
+        
+        # Add condition for refinance not being null
+        where_clauses.append("refinance IS NOT NULL")
+        
+        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
         query = f"""
         SELECT 
-           *
+            interest_rate,
+            loan_amount,
+            loan_balance,
+            loan_to_value_ratio,
+            credit_score,
+            debt_to_income_ratio,
+            income,
+            loan_term,
+            loan_age,
+            home_value,
+            current_rate,
+            rate_spread,
+            refinance AS actual_outcome,
+            DATETIME(timestamp) as prediction_time
         FROM `{self.project_id}.{self.dataset_id}.{self.table_id}`
         {where_clause}
-        ORDER BY timestamp DESC
-        LIMIT 1000
         """
         
-        if start_date and end_date:
-            query += f"""
-            WHERE DATETIME(timestamp) BETWEEN 
-                DATETIME('{start_date}') AND DATETIME('{end_date}')
-            """
-            
-        query += " ORDER BY prediction_time DESC"
+        df = self.client.query(query).to_dataframe()
+        if df.isnull().values.any():
+            self.logger.warning("Ground truth data contains NaN values.")
+            df = df.dropna()  # or handle appropriately
         
-        return self.client.query(query).to_dataframe()
-
+        return df
+    
     def compare_predictions(self, model_predictions, ground_truth):
         """Compare model predictions with ground truth data.
         
@@ -67,20 +72,13 @@ class ModelEvaluator:
         Returns:
             dict containing evaluation metrics
         """
-        # merged_data = pd.merge(
-        #     model_predictions,
-        #     ground_truth,
-        #     on=['interest_rate', 'loan_amount', 'loan_balance', 
-        #         'loan_to_value_ratio', 'credit_score', 'debt_to_income_ratio',
-        #         'income', 'loan_term', 'loan_age', 'home_value', 'current_rate',
-        #         'rate_spread'],
-        #     how='inner'
-        # )
-        
         merged_data = pd.merge(
             model_predictions,
-            ground_truth[['timestamp', 'refinance']],  # only keep relevant columns
-            on='timestamp',
+            ground_truth,
+            on=['interest_rate', 'loan_amount', 'loan_balance', 
+                'loan_to_value_ratio', 'credit_score', 'debt_to_income_ratio',
+                'income', 'loan_term', 'loan_age', 'home_value', 'current_rate',
+                'rate_spread'],
             how='inner'
         )
         
@@ -161,8 +159,8 @@ class ModelEvaluator:
         """Generate a comprehensive evaluation report.
         
         Args:
-            hours_back: Number of hours to look back for comparison
-            
+            hours_back: Number of hours to look back for comparison (default: 1)
+        
         Returns:
             dict containing the evaluation report
         """
@@ -173,7 +171,7 @@ class ModelEvaluator:
         ground_truth = self.get_ground_truth_data(start_date, end_date)
         
         if ground_truth.empty:
-            self.logger.warning(f"No ground truth data found for the last {days_back} days")
+            self.logger.warning(f"No ground truth data found for the last {hours_back} hours")
             return None
         
         # Get stored predictions from your prediction tracking table
@@ -186,7 +184,6 @@ class ModelEvaluator:
         model_predictions = self.client.query(predictions_query).to_dataframe()
         
         if model_predictions.empty:
-            print(ground_truth)
             self.logger.warning("No model predictions found for the specified time range")
             return None
         

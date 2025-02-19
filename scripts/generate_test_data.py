@@ -26,6 +26,8 @@ def generate_test_row():
         'home_value': np.random.uniform(150000, 750000),
         'current_rate': np.random.uniform(3.0, 7.0),
         'rate_spread': np.random.uniform(0.5, 2.0),
+        'refinance': int(np.random.randint(0, 2)),  # Convert to boolean instead of int
+
         'drift_metrics': json.dumps({
             'kl_divergence': np.random.uniform(0.1, 0.5),
             'ks_statistic': np.random.uniform(0.05, 0.2)

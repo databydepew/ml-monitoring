@@ -46,7 +46,7 @@ Primary monitoring service that tracks model performance and health:
 - Data quality checks
 - Periodic BigQuery data validation
 
-### 2. Drift Monitor (`drift_monitor.py`)
+### 2. Drift Monitor
 
 Specialized drift detection service:
 
@@ -102,6 +102,26 @@ refinance_model_feature_drift_p_value{feature="<feature>"}
 refinance_model_feature_drift_detected{feature="<feature>"}
 refinance_model_prediction_distribution_shift
 ```
+
+## Updates to the Monitoring System
+
+### Feedback Endpoint Changes
+- The `/feedback` endpoint now requires the following fields:
+  - `prediction`: The predicted outcome (0 or 1).
+  - `actual`: The actual outcome (0 or 1).
+  
+- The function now directly processes the prediction and actual values without unnecessary checks for missing fields.
+
+### Model Evaluator Updates
+- The `generate_evaluation_report` function has been modified to accept a `days_back` parameter instead of `hours_back`. This allows users to evaluate model performance over a longer time frame.
+  
+- The SQL query used to fetch ground truth data has been updated to select specific fields relevant to the evaluation, improving performance and clarity.
+
+### Confusion Matrix Metrics
+- The metrics for true positives, true negatives, false positives, and false negatives are now updated based on the new logic implemented in the feedback function. This enhances the accuracy of model performance tracking.
+
+### Considerations for Ground Truth Collection
+- Ensure that the methods used for collecting ground truth data align with the new model evaluation logic.
 
 ## Alerts Configuration
 
@@ -592,7 +612,7 @@ prediction_history = deque(maxlen=PREDICTION_WINDOW)
    - Each incorrect prediction adds a False
    - Current accuracy = (number of True values) / (total predictions in window)
    ```python
-   prediction_history.append(actual_outcome == predicted_outcome)
+
    current_accuracy = sum(prediction_history) / len(prediction_history)
    ```
 
@@ -601,74 +621,9 @@ prediction_history = deque(maxlen=PREDICTION_WINDOW)
    - Automatically drops old predictions when new ones arrive
    - Helps identify recent model performance trends
 
-#### Alternative Methods for Ground Truth Collection
 
-1. **Database Integration**:
-   - Connect to a loan management system or CRM database
-   - Periodically query for actual loan outcomes
-   - Match outcomes with predictions using prediction_id
-   ```python
-   # Example with SQL database
-   actual_outcomes = db.query("""
-       SELECT prediction_id, loan_status 
-       FROM loan_outcomes 
-       WHERE decision_date >= :start_date
-   """)
-   ```
 
-2. **Event-Driven Updates**:
-   - Subscribe to loan status change events
-   - Automatically update model metrics when loan status changes
-   - Use message queues (e.g., Kafka, RabbitMQ) for real-time updates
-   ```python
-   @kafka.consumer('loan_status_updates')
-   def process_loan_status(event):
-       prediction_id = event['prediction_id']
-       actual_outcome = event['final_status']
-       update_model_accuracy(prediction_id, actual_outcome)
-   ```
 
-3. **Batch Processing**:
-   - Run periodic jobs to fetch outcomes in batches
-   - Update metrics in bulk
-   - Useful for scenarios with delayed ground truth
-   ```python
-   @scheduled_job('cron', hour='0')
-   def update_model_metrics():
-       yesterday = datetime.now() - timedelta(days=1)
-       outcomes = fetch_loan_outcomes(date=yesterday)
-       bulk_update_metrics(outcomes)
-   ```
-
-4. **External API Integration**:
-   - Connect to third-party credit reporting APIs
-   - Fetch loan performance data automatically
-   - Cross-reference with model predictions
-   ```python
-   @api_client.scheduled_fetch
-   def fetch_credit_outcomes():
-       responses = credit_api.get_loan_statuses(loan_ids)
-       update_model_metrics(responses)
-   ```
-
-5. **Human-in-the-Loop**:
-   - Web interface for loan officers to input outcomes
-   - Quality assurance team reviews and validates
-   - Combine automated and manual verification
-   ```python
-   @app.route('/validate', methods=['POST'])
-   def validate_outcome():
-       reviewer_id = request.json['reviewer_id']
-       prediction_id = request.json['prediction_id']
-       validated_outcome = request.json['validated_outcome']
-       update_metrics_with_validation(prediction_id, validated_outcome, reviewer_id)
-   ```
-
-6. **Hybrid Approach**:
-   - Combine multiple methods based on data availability
-   - Use automated methods for quick feedback
-   - Supplement with manual validation for accuracy
-   - Implement confidence scores for different sources
 
 Considerations for Ground Truth Collection:
 - Data freshness vs. accuracy trade-off
@@ -694,4 +649,3 @@ Other performance metrics:
 
 - /evaluate: Batch evaluation of model performance using historical data.
 - /feedback: Real-time recording of individual prediction outcomes.
-

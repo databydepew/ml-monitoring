@@ -6,6 +6,7 @@ metadata:
   labels:
     app: classification
 spec:
+    # Use the existing GKE Workload Identity service account
   replicas: 1
   selector:
     matchLabels:
@@ -19,6 +20,7 @@ spec:
         prometheus.io/path: "/metrics"
         prometheus.io/port: "8001"
     spec:
+      serviceAccountName: gke-workload-ksa  # Use the existing GKE Workload Identity service account
       containers:
       - name: classification
         image: us-central1-docker.pkg.dev/mdepew-assets/vertex-ai-images/adv-monitoring:latest

@@ -13,11 +13,11 @@ def generate_random_sample() -> Dict:
         "loan_amount": random.uniform(100000, 1000000),
         "loan_balance": random.uniform(90000, 900000),
         "loan_to_value_ratio": random.uniform(0.5, 0.95),
-        "credit_score": random.uniform(580, 850),
+        "credit_score": random.randint(580, 850),
         "debt_to_income_ratio": random.uniform(0.1, 0.5),
         "income": random.uniform(50000, 300000),
         "loan_term": random.choice([15, 30]),
-        "loan_age": random.uniform(0, 10),
+        "loan_age": int(round(random.uniform(0, 10) *12)),
         "home_value": random.uniform(150000, 1500000),
         "current_rate": random.uniform(2.5, 7.0),
         "rate_spread": random.uniform(0.1, 2.0)
@@ -25,7 +25,7 @@ def generate_random_sample() -> Dict:
 
 def test_prediction_endpoint(n_requests: int = 100):
     """Test the prediction endpoint with multiple requests."""
-    url = "http://localhost:5001/predict"
+    url = "http://localhost:5000/predict"
     headers = {"Content-Type": "application/json"}
     
     predictions = []

@@ -24,6 +24,16 @@ def send_feedback(prediction, actual):
     else:
         print(f"Error sending feedback: {response.text}")
 
+def send_sample_feedback():
+    """Send sample feedback to the model monitoring service."""
+    sample_data = {
+        'actual_outcome': '1',
+        'prediction': '1'
+    }
+    
+    response = requests.post('http://localhost:5000/feedback', json=sample_data)
+    print('Response:', response.json())
+
 def main():
     # Scenario 1: Initially good predictions
     print("\n=== Scenario 1: Good Predictions ===")
@@ -58,6 +68,10 @@ def main():
         prediction = actual if random.random() < 0.9 else 1 - actual
         send_feedback(prediction, actual)
         time.sleep(1)
+    
+    # Send sample feedback
+    print("\n=== Sending Sample Feedback ===")
+    send_sample_feedback()
 
 if __name__ == "__main__":
     print("Starting feedback simulation...")
