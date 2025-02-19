@@ -65,43 +65,26 @@ evaluator = ModelEvaluator(
 
 def store_prediction_in_bigquery(features_dict, prediction, confidence, drift_metrics):
     """Store prediction and features in BigQuery."""
-    from google.cloud import bigquery
     bigquery_client = bigquery.Client(project='mdepew-assets')
-    try:
-        # Print debug information
-        print("Features Dict:", features_dict)
-        print("Prediction:", prediction)
-        print("Confidence:", confidence)
-        print("Drift Metrics:", drift_metrics)
 
-        # Create row with type checking
+    try:
+        # Create row with type checking and timestamp
         row = {
-            'interest_rate': float(features_dict.get('interest_rate', 0.0)),
-            'loan_amount': int(float(features_dict.get('loan_amount', 0))),
-            'loan_balance': int(float(features_dict.get('loan_balance', 0))),
-            'loan_to_value_ratio': float(features_dict.get('loan_to_value_ratio', 0.0)),
-            'credit_score': int(float(features_dict.get('credit_score', 0))),
-            'debt_to_income_ratio': float(features_dict.get('debt_to_income_ratio', 0.0)),
-            'income': int(float(features_dict.get('income', 0))),
-            'loan_term': int(float(features_dict.get('loan_term', 0))),
-            'loan_age': int(float(features_dict.get('loan_age', 0))),
-            'home_value': int(float(features_dict.get('home_value', 0))),
-            'current_rate': float(features_dict.get('current_rate', 0.0)),
-            'rate_spread': float(features_dict.get('rate_spread', 0.0)),
-            'prediction': int(prediction) if prediction is not None else 0,
-            'confidence': float(confidence) if confidence is not None else 0.0
+            #'timestamp': datetime.now().isoformat(),
+            'prediction': float(prediction),
+            'confidence': float(confidence),
+            # Copy feature values directly since they're already properly typed
+            **features_dict
         }
 
-
-        logging.info("BigQuery Row:", row)
-
         # Add drift metrics if they exist
-        if drift_metrics:
+        if isinstance(drift_metrics, dict):
             for metric_name, metric_value in drift_metrics.items():
-                row[f'drift_{metric_name}'] = float(metric_value) if metric_value is not None else 0.0
+                if metric_value is not None:
+                    row[f'drift_{metric_name}'] = float(metric_value)
 
-        # Print the final row for debugging
-        print("BigQuery Row:", row)
+        # Print debug information
+        print("Final BigQuery Row:", row)
 
         # Write to BigQuery
         errors = bigquery_client.insert_rows_json(MODEL_CONFIG['bigquery_table'], [row])
