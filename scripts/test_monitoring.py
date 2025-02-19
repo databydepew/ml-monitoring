@@ -60,7 +60,7 @@ def test_prediction_endpoint(n_requests: int = 100):
 def get_metrics():
     """Fetch and display metrics from the metrics endpoint."""
     try:
-        response = requests.get("http://localhost:5001/metrics")
+        response = requests.get("http://localhost:8001/metrics")
         if response.status_code == 200:
             print("\nMetrics:")
             print(response.text)

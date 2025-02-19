@@ -1,0 +1,44 @@
+groups:
+
+- name: model-performance-alerts
+  rules:
+  - alert: LowModelAccuracy
+    expr: model_accuracy < 0.7
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Model accuracy is below 70%"
+      description: "Current accuracy: {{ $value }}"
+  - alert: LowModelPrecision
+    expr: model_precision < 0.7
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Model precision is below 70%"
+      description: "Current precision: {{ $value }}"
+  - alert: LowModelRecall
+    expr: model_recall < 0.7
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Model recall is below 70%"
+      description: "Current recall: {{ $value }}"
+  - alert: LowModelF1Score
+    expr: model_f1_score < 0.7
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Model F1 score is below 70%"
+      description: "Current F1 score: {{ $value }}"
+  - alert: HighKLDrift
+    expr: model_kl_divergence > 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High KL Divergence detected"
+      description: "Current KL Divergence: {{ $value }}"

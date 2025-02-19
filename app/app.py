@@ -39,6 +39,7 @@ MODEL_CONFIG = {
         'current_rate',
         'rate_spread'
     ],
+    'bigquery_table': os.getenv('BIGQUERY_TABLE', 'synthetic.model_predictions'),
     'model_path': os.getenv('MODEL_PATH', 'model.pkl'),
     'prediction_threshold': float(os.getenv('PREDICTION_THRESHOLD', '0.5')),
     'monitoring_window': int(os.getenv('MONITORING_WINDOW', '100')),
@@ -62,51 +63,56 @@ evaluator = ModelEvaluator(
     table_id="model_predictions"
 )
 
-def store_prediction_in_bigquery(features, prediction, confidence, drift_metrics, actual=None):
-    """Store prediction details in BigQuery for later comparison.
-    
-    Args:
-        features: Dict of feature values
-        prediction: Model prediction (0 or 1)
-        confidence: Prediction confidence
-        drift_metrics: Dict of drift metrics
-    """
+def store_prediction_in_bigquery(features_dict, prediction, confidence, drift_metrics):
+    """Store prediction and features in BigQuery."""
+    from google.cloud import bigquery
+    bigquery_client = bigquery.Client(project='mdepew-assets')
     try:
-        # Format the row data
+        # Print debug information
+        print("Features Dict:", features_dict)
+        print("Prediction:", prediction)
+        print("Confidence:", confidence)
+        print("Drift Metrics:", drift_metrics)
+
+        # Create row with type checking
         row = {
-            'timestamp': datetime.now().isoformat(),
-            'prediction': int(prediction),  # Ensure integer
-            'actual': int(actual),  # Ensure integer
-            'confidence': float(confidence),  # Ensure float
-            **{k: float(v) if isinstance(v, (int, float)) else v for k, v in features.items()},  # Convert numeric types
-            'drift_metrics': json.dumps(drift_metrics)
+            'interest_rate': float(features_dict.get('interest_rate', 0.0)),
+            'loan_amount': int(float(features_dict.get('loan_amount', 0))),
+            'loan_balance': int(float(features_dict.get('loan_balance', 0))),
+            'loan_to_value_ratio': float(features_dict.get('loan_to_value_ratio', 0.0)),
+            'credit_score': int(float(features_dict.get('credit_score', 0))),
+            'debt_to_income_ratio': float(features_dict.get('debt_to_income_ratio', 0.0)),
+            'income': int(float(features_dict.get('income', 0))),
+            'loan_term': int(float(features_dict.get('loan_term', 0))),
+            'loan_age': int(float(features_dict.get('loan_age', 0))),
+            'home_value': int(float(features_dict.get('home_value', 0))),
+            'current_rate': float(features_dict.get('current_rate', 0.0)),
+            'rate_spread': float(features_dict.get('rate_spread', 0.0)),
+            'prediction': int(prediction) if prediction is not None else 0,
+            'confidence': float(confidence) if confidence is not None else 0.0
         }
-        logger.info(f"Prepared row for BigQuery: {row}")
-        
-        # Construct table ID
-        table_id = f"{project_id}.synthetic.model_predictions"
-        
-        # Attempt to insert row
-        errors = bq_client.insert_rows_json(
-            table_id,
-            [row],
-        )
+
+
+        logging.info("BigQuery Row:", row)
+
+        # Add drift metrics if they exist
+        if drift_metrics:
+            for metric_name, metric_value in drift_metrics.items():
+                row[f'drift_{metric_name}'] = float(metric_value) if metric_value is not None else 0.0
+
+        # Print the final row for debugging
+        print("BigQuery Row:", row)
+
+        # Write to BigQuery
+        errors = bigquery_client.insert_rows_json(MODEL_CONFIG['bigquery_table'], [row])
         
         if errors:
-            logger.error(f"BigQuery insert errors: {errors}")
-            raise Exception(f"Failed to insert rows: {errors}")
-        else:
-            logger.info("Successfully wrote prediction to BigQuery")
+            logger.error(f"Error writing to BigQuery: {errors}")
+            raise Exception(f"BigQuery insert errors: {errors}")
             
     except Exception as e:
         logger.error(f"Error writing to BigQuery: {str(e)}")
-        logger.error(f"Row data: {row}")
-        logger.error(f"Table ID: {table_id}")
         raise
-    
-    if errors:
-        logger.error(f"Failed to insert prediction into BigQuery: {errors}")
-
 
 metrics_port = int(os.getenv('PROMETHEUS_METRICS_PORT', '8001'))
 start_http_server(metrics_port)
@@ -388,7 +394,7 @@ def predict():
             float(data[f]) 
             for f in MODEL_CONFIG['feature_columns']
         ]
-        
+        print(features)
         # Record feature distributions and compute KL divergence
         drift_metrics = {}
         for feature, value in zip(MODEL_CONFIG['feature_columns'], features):
@@ -449,7 +455,7 @@ def predict():
         
         # Store prediction in BigQuery
         features_dict = dict(zip(MODEL_CONFIG['feature_columns'], features))
-
+        print(features_dict)
         store_prediction_in_bigquery(features_dict, prediction, confidence, drift_metrics)
         
         response = {
@@ -463,6 +469,7 @@ def predict():
         return jsonify(response)
         
     except Exception as e:
+        print(e)
         logger.error(f"Prediction error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 

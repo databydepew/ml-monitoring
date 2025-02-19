@@ -1,28 +1,29 @@
-import unittest
+import requests
 import json
-from app import app  # Import your Flask app
 
-class PredictTestCase(unittest.TestCase):
-    def setUp(self):
-        self.app = app.test_client()
-        self.app.testing = True
+def send_test_prediction():
+    """Send a test prediction request."""
+    data = {
+        'interest_rate': 3.5,
+        'loan_amount': 250000,
+        'loan_balance': 245000,
+        'loan_to_value_ratio': 0.8, 
+        'credit_score': 720,
+        'debt_to_income_ratio': 0.28,
+        'income': 120000,
+        'loan_term': 30,
+        'loan_age': 2,
+        'home_value': 350000,
+        'current_rate': 3.75,
+        'rate_spread': 0.25,
+        'loan_purpose': 'REFINANCE'
+    }
+    try:
+        response = requests.post("http://localhost:5000/predict", json=data)
+        print(f"\nPrediction Response (Status {response.status_code}):")
+        print(response.json() if response.ok else response.text)
+    except Exception as e:
+        print(f"Error sending prediction: {str(e)}")
 
-    def test_predict(self):
-        # Sample input data
-        input_data = {
-            "feature1": value1,
-            "feature2": value2,
-            # Add other features as needed
-        }
-        
-        response = self.app.post('/predict', data=json.dumps(input_data), content_type='application/json')
-        
-        # Check that the response is 200 OK
-        self.assertEqual(response.status_code, 200)
-        
-        # Check the response data (modify as per your expected output)
-        response_data = json.loads(response.data)
-        self.assertIn('prediction', response_data)
-
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == "__main__":
+    send_test_prediction()

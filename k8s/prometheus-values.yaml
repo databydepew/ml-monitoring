@@ -8,9 +8,17 @@ server:
 
   service:
     type: ClusterIP
+    port: 9090
 
   extraScrapeConfigs: |
-    - job_name: 'classification-service'
+    - job_name: 'ml-model-metrics'
+      static_configs:
+        - targets: ['localhost:8001']
+      metrics_path: /metrics
+      scrape_interval: 5s
+      scheme: http
+
+    - job_name: 'kubernetes-services'
       kubernetes_sd_configs:
         - role: endpoints
           namespaces:
@@ -29,17 +37,52 @@ server:
           target_label: __address__
           regex: ([^:]+)(?::\d+)?;(\d+)
           replacement: $1:$2
-        - action: labelmap
-          regex: __meta_kubernetes_service_label_(.+)
-        - source_labels: [__meta_kubernetes_namespace]
-          action: replace
-          target_label: kubernetes_namespace
-        - source_labels: [__meta_kubernetes_service_name]
-          action: replace
-          target_label: kubernetes_service_name
+
+  alerting:
+    alertmanagers:
+      - static_configs:
+          - targets:
+            - "alertmanager:9093"
+
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: model-performance-alerts
+        rules:
+        - alert: LowModelAccuracy
+          expr: model_accuracy < 0.7
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Model accuracy is below 70%"
+            description: "Current accuracy: {{ $value }}"
+        - alert: HighLatency
+          expr: prediction_latency_seconds > 1.0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High prediction latency"
+            description: "Latency: {{ $value }} seconds"
 
 alertmanager:
-  enabled: false
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'slack'
+    receivers:
+      - name: 'slack'
+        slack_configs:
+          - api_url: 'https://hooks.slack.com/services/your/slack/webhook'
+            channel: '#alerts'
+            send_resolved: true
 
 nodeExporter:
   enabled: false
